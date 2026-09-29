@@ -1,0 +1,649 @@
+// Generated from the Supabase schema (project xkzccfxrixpyozfhamdh).
+// Regenerate after every migration:
+//   npx supabase gen types typescript --project-id xkzccfxrixpyozfhamdh > lib/supabase/database.types.ts
+// Server-only tables in the `internal` schema are intentionally not exposed or typed here.
+
+export type Json =
+  | string
+  | number
+  | boolean
+  | null
+  | { [key: string]: Json | undefined }
+  | Json[]
+
+export type Database = {
+  __InternalSupabase: {
+    PostgrestVersion: "14.18"
+  }
+  public: {
+    Tables: {
+      activity_logs: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          message: string
+          metadata: Json
+          store_id: string | null
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          message: string
+          metadata?: Json
+          store_id?: string | null
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          message?: string
+          metadata?: Json
+          store_id?: string | null
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_store_fkey"
+            columns: ["store_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "workspace_id"]
+          },
+          {
+            foreignKeyName: "activity_logs_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      google_drive_connections: {
+        Row: {
+          connected_at: string | null
+          connection_status: string
+          created_at: string
+          google_account_email: string | null
+          id: string
+          last_verified_at: string | null
+          root_folder_id: string | null
+          root_folder_name: string | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          connected_at?: string | null
+          connection_status?: string
+          created_at?: string
+          google_account_email?: string | null
+          id?: string
+          last_verified_at?: string | null
+          root_folder_id?: string | null
+          root_folder_name?: string | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          connected_at?: string | null
+          connection_status?: string
+          created_at?: string
+          google_account_email?: string | null
+          id?: string
+          last_verified_at?: string | null
+          root_folder_id?: string | null
+          root_folder_name?: string | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "google_drive_connections_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      product_mappings: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          drive_folder_id: string
+          drive_folder_name: string | null
+          id: string
+          mapping_type: string
+          shopify_product_id: string
+          shopify_product_title: string | null
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          drive_folder_id: string
+          drive_folder_name?: string | null
+          id?: string
+          mapping_type?: string
+          shopify_product_id: string
+          shopify_product_title?: string | null
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          drive_folder_id?: string
+          drive_folder_name?: string | null
+          id?: string
+          mapping_type?: string
+          shopify_product_id?: string
+          shopify_product_title?: string | null
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "product_mappings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          avatar_url: string | null
+          created_at: string
+          full_name: string | null
+          id: string
+          updated_at: string
+        }
+        Insert: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id: string
+          updated_at?: string
+        }
+        Update: {
+          avatar_url?: string | null
+          created_at?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      shopify_connections: {
+        Row: {
+          connection_status: string
+          created_at: string
+          granted_scopes: Json
+          id: string
+          installed_at: string | null
+          last_verified_at: string | null
+          shop_domain: string | null
+          shopify_shop_id: string | null
+          store_id: string
+          token_expires_at: string | null
+          updated_at: string
+        }
+        Insert: {
+          connection_status?: string
+          created_at?: string
+          granted_scopes?: Json
+          id?: string
+          installed_at?: string | null
+          last_verified_at?: string | null
+          shop_domain?: string | null
+          shopify_shop_id?: string | null
+          store_id: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Update: {
+          connection_status?: string
+          created_at?: string
+          granted_scopes?: Json
+          id?: string
+          installed_at?: string | null
+          last_verified_at?: string | null
+          shop_domain?: string | null
+          shopify_shop_id?: string | null
+          store_id?: string
+          token_expires_at?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shopify_connections_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      store_settings: {
+        Row: {
+          allowed_image_types: string[]
+          auto_sync_enabled: boolean
+          case_insensitive: boolean
+          created_at: string
+          id: string
+          ignored_folders: string[]
+          matching_mode: string
+          store_id: string
+          sync_schedule: string | null
+          trim_spaces: boolean
+          updated_at: string
+        }
+        Insert: {
+          allowed_image_types?: string[]
+          auto_sync_enabled?: boolean
+          case_insensitive?: boolean
+          created_at?: string
+          id?: string
+          ignored_folders?: string[]
+          matching_mode?: string
+          store_id: string
+          sync_schedule?: string | null
+          trim_spaces?: boolean
+          updated_at?: string
+        }
+        Update: {
+          allowed_image_types?: string[]
+          auto_sync_enabled?: boolean
+          case_insensitive?: boolean
+          created_at?: string
+          id?: string
+          ignored_folders?: string[]
+          matching_mode?: string
+          store_id?: string
+          sync_schedule?: string | null
+          trim_spaces?: boolean
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "store_settings_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: true
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stores: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          shopify_domain: string | null
+          status: string
+          updated_at: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          shopify_domain?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          shopify_domain?: string | null
+          status?: string
+          updated_at?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stores_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_errors: {
+        Row: {
+          created_at: string
+          error_type: string
+          id: string
+          message: string
+          resolved: boolean
+          resolved_at: string | null
+          store_id: string
+          sync_item_id: string | null
+          sync_job_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          error_type: string
+          id?: string
+          message: string
+          resolved?: boolean
+          resolved_at?: string | null
+          store_id: string
+          sync_item_id?: string | null
+          sync_job_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          error_type?: string
+          id?: string
+          message?: string
+          resolved?: boolean
+          resolved_at?: string | null
+          store_id?: string
+          sync_item_id?: string | null
+          sync_job_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_errors_item_fkey"
+            columns: ["sync_item_id", "store_id"]
+            isOneToOne: false
+            referencedRelation: "sync_items"
+            referencedColumns: ["id", "store_id"]
+          },
+          {
+            foreignKeyName: "sync_errors_job_fkey"
+            columns: ["sync_job_id", "store_id"]
+            isOneToOne: false
+            referencedRelation: "sync_jobs"
+            referencedColumns: ["id", "store_id"]
+          },
+          {
+            foreignKeyName: "sync_errors_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_images: {
+        Row: {
+          checksum: string | null
+          created_at: string
+          drive_file_id: string
+          drive_modified_at: string | null
+          filename: string
+          id: string
+          shopify_media_id: string | null
+          shopify_product_id: string
+          store_id: string
+          sync_item_id: string | null
+          updated_at: string
+          upload_status: string
+          uploaded_at: string | null
+        }
+        Insert: {
+          checksum?: string | null
+          created_at?: string
+          drive_file_id: string
+          drive_modified_at?: string | null
+          filename: string
+          id?: string
+          shopify_media_id?: string | null
+          shopify_product_id: string
+          store_id: string
+          sync_item_id?: string | null
+          updated_at?: string
+          upload_status?: string
+          uploaded_at?: string | null
+        }
+        Update: {
+          checksum?: string | null
+          created_at?: string
+          drive_file_id?: string
+          drive_modified_at?: string | null
+          filename?: string
+          id?: string
+          shopify_media_id?: string | null
+          shopify_product_id?: string
+          store_id?: string
+          sync_item_id?: string | null
+          updated_at?: string
+          upload_status?: string
+          uploaded_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_images_item_fkey"
+            columns: ["sync_item_id", "store_id"]
+            isOneToOne: false
+            referencedRelation: "sync_items"
+            referencedColumns: ["id", "store_id"]
+          },
+          {
+            foreignKeyName: "sync_images_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      sync_items: {
+        Row: {
+          created_at: string
+          drive_folder_id: string
+          drive_folder_name: string | null
+          error_message: string | null
+          id: string
+          images_found: number
+          images_uploaded: number
+          product_status: string | null
+          shopify_product_id: string | null
+          shopify_product_title: string | null
+          status: string
+          store_id: string
+          sync_job_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          drive_folder_id: string
+          drive_folder_name?: string | null
+          error_message?: string | null
+          id?: string
+          images_found?: number
+          images_uploaded?: number
+          product_status?: string | null
+          shopify_product_id?: string | null
+          shopify_product_title?: string | null
+          status?: string
+          store_id: string
+          sync_job_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          drive_folder_id?: string
+          drive_folder_name?: string | null
+          error_message?: string | null
+          id?: string
+          images_found?: number
+          images_uploaded?: number
+          product_status?: string | null
+          shopify_product_id?: string | null
+          shopify_product_title?: string | null
+          status?: string
+          store_id?: string
+          sync_job_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_items_job_fkey"
+            columns: ["sync_job_id", "store_id"]
+            isOneToOne: false
+            referencedRelation: "sync_jobs"
+            referencedColumns: ["id", "store_id"]
+          },
+        ]
+      }
+      sync_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          errors_count: number
+          id: string
+          images_uploaded: number
+          products_processed: number
+          products_synced: number
+          started_at: string | null
+          status: string
+          store_id: string
+          trigger_type: string
+          warnings_count: number
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          errors_count?: number
+          id?: string
+          images_uploaded?: number
+          products_processed?: number
+          products_synced?: number
+          started_at?: string | null
+          status?: string
+          store_id: string
+          trigger_type?: string
+          warnings_count?: number
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          errors_count?: number
+          id?: string
+          images_uploaded?: number
+          products_processed?: number
+          products_synced?: number
+          started_at?: string | null
+          status?: string
+          store_id?: string
+          trigger_type?: string
+          warnings_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sync_jobs_store_id_fkey"
+            columns: ["store_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspace_members: {
+        Row: {
+          created_at: string
+          id: string
+          role: string
+          user_id: string
+          workspace_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id: string
+          workspace_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: string
+          user_id?: string
+          workspace_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "workspace_members_workspace_id_fkey"
+            columns: ["workspace_id"]
+            isOneToOne: false
+            referencedRelation: "workspaces"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      workspaces: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          slug: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          name?: string
+          slug?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      create_workspace: {
+        Args: { p_name: string; p_slug?: string }
+        Returns: {
+          created_at: string
+          created_by: string | null
+          id: string
+          name: string
+          slug: string | null
+          updated_at: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "workspaces"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
+}
+
+type PublicSchema = Database["public"]
+
+export type Tables<T extends keyof PublicSchema["Tables"]> = PublicSchema["Tables"][T]["Row"]
+export type TablesInsert<T extends keyof PublicSchema["Tables"]> = PublicSchema["Tables"][T]["Insert"]
+export type TablesUpdate<T extends keyof PublicSchema["Tables"]> = PublicSchema["Tables"][T]["Update"]

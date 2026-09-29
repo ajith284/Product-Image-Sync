@@ -159,6 +159,20 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 - **Phase 0 — Audit:** repo and Supabase were empty; this spec created.
 - **Phase 1 — Foundation (done):** Next.js 16.3 (App Router, Turbopack), React 19, TypeScript, Tailwind 4 (CSS-first config in `app/globals.css`), shadcn/ui (new-york, neutral), Lucide, `@supabase/ssr`. Root-level layout: `app/`, `components/{ui,layout,shared,auth}`, `lib/`, `lib/supabase/`, `hooks/`, `proxy.ts`, `public/`. Email/password auth (login, signup, email-link confirm, sign out). `proxy.ts` refreshes the session and guards routes; `app/(app)/layout.tsx` re-verifies with `getClaims()`. Shell: sidebar (`components/layout/app-sidebar.tsx`), header (`components/layout/app-header.tsx`), placeholder pages: Dashboard, Stores, Add Store, Drive Mapping, Sync Jobs, Review Center, Activity, Settings. `.env.example` lists variable names only (public vars). `lib/env.server.ts` (`server-only`) is the place for future secrets. Security headers in `next.config.ts`. No database objects created. Verified: fresh `npm install`, `npm run typecheck`, `npm run build`, `npm run dev`.
 
+- **Phase 2 — Database + RLS (done):** migrations `supabase/migrations/20260929155910_initial_schema.sql` and `20260929155952_rls_and_grants.sql` applied to `xkzccfxrixpyozfhamdh`. 48/48 RLS/constraint tests pass (`supabase/tests/rls_test.sql`, self-rolling-back). Typed clients via `lib/supabase/database.types.ts`; DB enum values in `lib/supabase/constants.ts`.
+
+### Database (Phase 2)
+- **Schemas:** `public` (API-exposed, RLS on every table) · `private` (RLS helper functions; not exposed) · `internal` (server-only tables `integration_secrets`, `oauth_states`; not exposed, no USAGE for anon/authenticated, RLS on with no policies → service_role only).
+- **Tables (public):** profiles, workspaces, workspace_members, stores, shopify_connections, google_drive_connections, store_settings, product_mappings, sync_jobs, sync_items, sync_images, sync_errors, activity_logs. Enum-like columns are `text` + CHECK constraints (values mirrored in `lib/supabase/constants.ts`).
+- **Tenant integrity:** composite FKs force child rows to match their parent's store/workspace (sync_items→sync_jobs, sync_images/sync_errors→sync_items/jobs, activity_logs/oauth_states→stores).
+- **Access:** membership via `workspace_members` only (never user_metadata). owner = all; admin = stores, store settings, add/remove `member`s; member = read + manual product mappings. Nobody can create/assign `owner` or change their own role via the API. Connection metadata, sync history and activity are read-only for users (server writes).
+- **Workspace creation:** `rpc('create_workspace', { p_name, p_slug })` — SECURITY DEFINER, creates workspace + caller's owner row atomically. Advisor warns (0029); intentional.
+- **Automatic rows:** profile on sign-up (trigger on auth.users); store_settings with defaults on store insert; secrets deleted when their connection is deleted.
+- **Column grants:** users may only write specific columns (e.g. stores: insert workspace_id/name/shopify_domain, update name; `status` is server-managed).
+- **Default privileges changed:** new tables/functions created in `public` are NOT granted to anon/authenticated automatically. Every future migration must add explicit GRANTs + RLS policies.
+- **Secrets:** tokens are encrypted by the app (server-side key, AES-GCM planned) before insert into `internal.integration_secrets`; server reads/writes with the secret key only. Never expose `internal` in API settings.
+- **After every migration:** regenerate `lib/supabase/database.types.ts`, rerun `supabase/tests/rls_test.sql`, run security advisors.
+
 ### Conventions established in Phase 1
 - Server Supabase client: `@/lib/supabase/server` (per request, user-scoped, RLS applies). Browser client: `@/lib/supabase/client`.
 - Auth check: `requireUser()` / `getSessionUser()` from `@/lib/auth`. Never trust `getSession()` on the server.
@@ -168,10 +182,10 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 - Next.js 16: `proxy.ts` replaces `middleware.ts`. Read `node_modules/next/dist/docs/` for current APIs.
 
 ### Environment
-- **Local repo** `C:\Users\ajith\Desktop\shopify-image-uploaded-automation` — branch `Clone`, no commits, no remote.
-- **GitHub** `ajith284/product-image-sync` — public, empty, not yet linked as `origin`.
-- **Supabase** `xkzccfxrixpyozfhamdh` — still empty (no tables, policies, functions, buckets). Extensions: pgcrypto, uuid-ossp, supabase_vault, pg_stat_statements.
+- **Local repo** `C:\Users\ajith\Desktop\shopify-image-uploaded-automation` — branch `main`, remote `origin` = GitHub.
+- **GitHub** `ajith284/product-image-sync` (public).
+- **Supabase** `xkzccfxrixpyozfhamdh` — schema from Phase 2 applied; no data. No storage buckets.
 - **`.mcp.json`** still points at a different Supabase project (`oabbngivgsckcfdaqhbp`) — fix before local DB work.
 
 ### Not built yet
-Workspaces/membership schema + RLS, password reset, Store Details page, Shopify OAuth, Google Drive OAuth, token encryption, sync engine, n8n endpoints.
+Workspace creation/onboarding UI, member invites, password reset, Store Details page, Shopify OAuth, Google Drive OAuth, token encryption, sync engine, n8n endpoints.
