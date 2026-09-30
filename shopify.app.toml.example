@@ -1,0 +1,27 @@
+# Shopify app configuration template for Product Image Sync.
+# Copy to shopify.app.toml, replace the placeholders, then `shopify app deploy`.
+# See docs/shopify-setup.md. Never put the client SECRET in this file.
+
+client_id = "YOUR_SHOPIFY_CLIENT_ID"
+name = "Product Image Sync"
+application_url = "https://your-domain.com/stores"
+embedded = false
+
+[access_scopes]
+scopes = "read_products,write_products,write_files"
+
+[auth]
+redirect_urls = [
+  "https://your-domain.com/api/shopify/callback",
+]
+
+[webhooks]
+api_version = "2026-07"
+
+  [[webhooks.subscriptions]]
+  topics = ["app/uninstalled"]
+  uri = "https://your-domain.com/api/shopify/webhooks"
+
+  [[webhooks.subscriptions]]
+  compliance_topics = ["customers/data_request", "customers/redact", "shop/redact"]
+  uri = "https://your-domain.com/api/shopify/webhooks"

@@ -182,6 +182,10 @@ export type Database = {
       }
       shopify_connections: {
         Row: {
+          connected_by: string | null
+          disconnected_at: string | null
+          last_error: string | null
+          refresh_token_expires_at: string | null
           connection_status: string
           created_at: string
           granted_scopes: Json
@@ -195,6 +199,10 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          connected_by?: string | null
+          disconnected_at?: string | null
+          last_error?: string | null
+          refresh_token_expires_at?: string | null
           connection_status?: string
           created_at?: string
           granted_scopes?: Json
@@ -208,6 +216,10 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          connected_by?: string | null
+          disconnected_at?: string | null
+          last_error?: string | null
+          refresh_token_expires_at?: string | null
           connection_status?: string
           created_at?: string
           granted_scopes?: Json
@@ -631,6 +643,83 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      // Service-role-only RPCs (migration 20260930110157_shopify_oauth). Nullable args hand-annotated.
+      shopify_begin_oauth: {
+        Args: { p_state_hash: string; p_store_id: string; p_ttl_seconds?: number; p_user_id: string }
+        Returns: string
+      }
+      shopify_consume_oauth_state: {
+        Args: { p_state_hash: string }
+        Returns: {
+          shop_domain: string | null
+          status: string
+          store_id: string | null
+          user_id: string | null
+          workspace_id: string | null
+        }[]
+      }
+      shopify_disconnect: {
+        Args: { p_store_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      shopify_get_credentials: {
+        Args: { p_store_id: string }
+        Returns: {
+          connection_id: string
+          connection_status: string
+          encrypted_access_token: string | null
+          encrypted_refresh_token: string | null
+          refresh_token_expires_at: string | null
+          shop_domain: string
+          token_expires_at: string | null
+          token_version: number
+          workspace_id: string
+        }[]
+      }
+      shopify_handle_app_uninstalled: {
+        Args: { p_shop_domain: string; p_webhook_id: string }
+        Returns: string
+      }
+      shopify_record_verification: {
+        Args: {
+          p_error?: string | null
+          p_failure_status?: string | null
+          p_log?: boolean
+          p_ok: boolean
+          p_shopify_shop_id?: string | null
+          p_store_id: string
+        }
+        Returns: undefined
+      }
+      shopify_record_webhook: {
+        Args: { p_shop_domain: string | null; p_topic: string; p_webhook_id: string }
+        Returns: boolean
+      }
+      shopify_save_connection: {
+        Args: {
+          p_access_expires_at: string | null
+          p_encrypted_access_token: string
+          p_encrypted_refresh_token: string | null
+          p_refresh_expires_at: string | null
+          p_scopes: string
+          p_shop_domain: string
+          p_store_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      shopify_store_refreshed_tokens: {
+        Args: {
+          p_access_expires_at: string | null
+          p_connection_id: string
+          p_encrypted_access_token: string
+          p_encrypted_refresh_token: string | null
+          p_expected_version: number
+          p_refresh_expires_at: string | null
+        }
+        Returns: boolean
       }
     }
     Enums: {

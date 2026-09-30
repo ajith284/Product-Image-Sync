@@ -2,7 +2,13 @@ export const DEFAULT_AUTHENTICATED_PATH = "/dashboard";
 export const LOGIN_PATH = "/login";
 
 /** Paths reachable without a session. */
-const PUBLIC_PREFIXES = ["/login", "/signup", "/auth"];
+const PUBLIC_PREFIXES = [
+  "/login",
+  "/signup",
+  "/auth",
+  // Shopify webhooks carry no user session; they are authenticated by HMAC.
+  "/api/shopify/webhooks",
+];
 
 /** Pages a signed-in user should be sent away from. */
 const GUEST_ONLY_PREFIXES = ["/login", "/signup"];

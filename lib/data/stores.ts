@@ -78,7 +78,7 @@ export async function getStoreDetails(workspaceId: string, storeId: string) {
   const [shopify, drive, jobs] = await Promise.all([
     supabase
       .from("shopify_connections")
-      .select("connection_status, shop_domain, installed_at, last_verified_at")
+      .select("connection_status, shop_domain, installed_at, last_verified_at, last_error, refresh_token_expires_at, disconnected_at")
       .eq("store_id", storeId)
       .maybeSingle(),
     supabase

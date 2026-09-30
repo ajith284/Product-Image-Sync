@@ -24,7 +24,7 @@ npm run dev                  # http://localhost:3000
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys → Publishable key (`sb_publishable_…`) |
 | `NEXT_PUBLIC_SITE_URL` | Base URL of this app, e.g. `http://localhost:3000` |
 
-Shopify variables (`SHOPIFY_*`) are server-only — see [docs/shopify-setup.md](docs/shopify-setup.md).
+Server-only secrets (`SHOPIFY_*`, `SUPABASE_SECRET_KEY`) — see [docs/shopify-setup.md](docs/shopify-setup.md). Never prefix them with `NEXT_PUBLIC_`.
 
 ## Scripts
 
@@ -44,6 +44,7 @@ app/
 ├── layout.tsx, page.tsx, globals.css   # root layout, redirect, Tailwind theme
 ├── (auth)/                             # /login, /signup + server actions
 ├── auth/confirm, auth/error            # email-link handling
+├── api/shopify/callback, api/shopify/webhooks   # Shopify OAuth redirect + webhooks
 └── (app)/                              # protected area (sidebar + header shell)
     ├── dashboard/  stores/  stores/new/  drive-mapping/
     └── sync-jobs/  review/  activity/  settings/

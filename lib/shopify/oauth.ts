@@ -3,12 +3,11 @@ import "server-only";
 import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 
 import { getShopifyConfig } from "@/lib/shopify/config";
-import type { ShopDomain } from "@/lib/shopify/types";
+import type { ShopDomain, ShopifyConfig } from "@/lib/shopify/types";
 
 /**
- * OAuth PREPARATION for the authorization code grant (non-embedded app).
- * Pure helpers only — there are no routes, no token exchange and no token
- * storage yet. Planned flow (next phase):
+ * Low-level OAuth helpers for the authorization code grant (non-embedded app).
+ * The flow itself lives in lib/shopify/auth.ts:
  *
  *   1. /api/shopify/auth   verify user → workspace → owner/admin → store belongs
  *                          to workspace; createOAuthState(); save stateHash in
@@ -38,8 +37,10 @@ export function hashOAuthState(state: string): string {
  * https://{shop}/admin/oauth/authorize?client_id&scope&redirect_uri&state
  * No grant_options[] → offline (app-level) access, required for background sync.
  */
-export function buildAuthorizeUrl(params: { shop: ShopDomain; state: string }): string {
-  const config = getShopifyConfig();
+export function buildAuthorizeUrl(
+  params: { shop: ShopDomain; state: string },
+  config: Pick<ShopifyConfig, "clientId" | "scopes" | "redirectUri"> = getShopifyConfig(),
+): string {
   const url = new URL(`https://${params.shop}/admin/oauth/authorize`);
   url.searchParams.set("client_id", config.clientId);
   url.searchParams.set("scope", config.scopes.join(","));

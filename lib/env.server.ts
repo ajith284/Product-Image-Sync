@@ -4,26 +4,22 @@ import { z } from "zod";
 
 /**
  * Server-only environment variables. Importing this file from a Client
- * Component fails the build, so secrets added here can never reach the browser.
- *
- * Empty in the foundation phase. Later phases add their variables to this
- * schema (never with a NEXT_PUBLIC_ prefix) and to .env.example by name only.
+ * Component fails the build, so secrets here can never reach the browser.
+ * Shopify variables are validated separately in lib/shopify/config.ts.
  */
-const serverEnvSchema = z.object({});
+const serverEnvSchema = z.object({
+  /** Supabase secret key (sb_secret_…). Bypasses RLS — server code only. */
+  SUPABASE_SECRET_KEY: z.string().trim().min(1).optional(),
+});
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;
 
-let cached: ServerEnv | undefined;
-
 export function getServerEnv(): ServerEnv {
-  if (!cached) {
-    const parsed = serverEnvSchema.safeParse(process.env);
-    if (!parsed.success) {
-      // Report which variables are invalid, never their values.
-      const names = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
-      throw new Error(`Invalid server environment variables: ${names}`);
-    }
-    cached = parsed.data;
+  const parsed = serverEnvSchema.safeParse(process.env);
+  if (!parsed.success) {
+    // Report which variables are invalid, never their values.
+    const names = parsed.error.issues.map((i) => i.path.join(".")).join(", ");
+    throw new Error(`Invalid server environment variables: ${names}`);
   }
-  return cached;
+  return parsed.data;
 }

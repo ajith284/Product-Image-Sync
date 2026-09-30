@@ -1,14 +1,15 @@
-import { CheckCircle2Icon, HardDriveIcon, RefreshCwIcon, ShoppingBagIcon } from "lucide-react";
+import { AlertTriangleIcon, CheckCircle2Icon, HardDriveIcon, RefreshCwIcon, type LucideIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { ShopifyConnectionCard } from "@/components/stores/shopify-connection-card";
 import { StoreStatusBadge } from "@/components/stores/store-status-badge";
 import { formatDate } from "@/components/stores/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getStoreDetails } from "@/lib/data/stores";
+import { isShopifyFlowErrorCode, SHOPIFY_FLOW_MESSAGES } from "@/lib/shopify/errors";
 import { hasPermission, requireWorkspace } from "@/lib/workspace";
 
 export const metadata = { title: "Store details" };
@@ -22,7 +23,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
   );
 }
 
-function Placeholder({ icon: Icon, text }: { icon: typeof ShoppingBagIcon; text: string }) {
+function Placeholder({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
   return (
     <div className="flex items-center gap-3 rounded-lg border border-dashed p-4">
       <Icon className="size-5 text-muted-foreground" />
@@ -33,7 +34,8 @@ function Placeholder({ icon: Icon, text }: { icon: typeof ShoppingBagIcon; text:
 
 export default async function StoreDetailsPage({ params, searchParams }: PageProps<"/stores/[id]">) {
   const ctx = await requireWorkspace();
-  const [{ id }, { created }] = await Promise.all([params, searchParams]);
+  const [{ id }, query] = await Promise.all([params, searchParams]);
+  const { created, shopify: shopifyResult, shopify_error: shopifyError } = query;
 
   // Store must belong to the CURRENT workspace (and be visible under RLS).
   const details = await getStoreDetails(ctx.workspace.workspaceId, id);
@@ -48,7 +50,24 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
       {created ? (
         <Alert>
           <CheckCircle2Icon />
-          <AlertDescription>Store added. Connecting Shopify and Google Drive will be available soon.</AlertDescription>
+          <AlertDescription>Store added. Next, connect Shopify below.</AlertDescription>
+        </Alert>
+      ) : null}
+      {shopifyResult === "connected" ? (
+        <Alert>
+          <CheckCircle2Icon />
+          <AlertDescription>Shopify connected and verified.</AlertDescription>
+        </Alert>
+      ) : shopifyResult === "connected_unverified" ? (
+        <Alert>
+          <AlertTriangleIcon />
+          <AlertDescription>Shopify connected, but we couldn&apos;t verify it yet. Use Verify to try again.</AlertDescription>
+        </Alert>
+      ) : null}
+      {isShopifyFlowErrorCode(shopifyError) ? (
+        <Alert variant="destructive">
+          <AlertTriangleIcon />
+          <AlertDescription>{SHOPIFY_FLOW_MESSAGES[shopifyError]}</AlertDescription>
         </Alert>
       ) : null}
 
@@ -69,38 +88,12 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <ShoppingBagIcon className="size-4" /> Shopify
-            </CardTitle>
-            <CardDescription>Lets us add images to your existing products.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {shopify ? (
-              <dl className="grid gap-3 sm:grid-cols-2">
-                <Field label="Connection">
-                  <Badge variant="outline">{shopify.connection_status}</Badge>
-                </Field>
-                <Field label="Shop">{shopify.shop_domain ?? "—"}</Field>
-              </dl>
-            ) : (
-              <div className="grid gap-3">
-                <Placeholder icon={ShoppingBagIcon} text="Not connected" />
-                {canManage ? (
-                  <div className="flex flex-wrap items-center gap-3">
-                    {/* Next phase: links to /api/shopify/auth?store=<id> (server verifies access). */}
-                    <Button disabled>
-                      <ShoppingBagIcon />
-                      Connect Shopify
-                    </Button>
-                    <span className="text-sm text-muted-foreground">Available in the next update.</span>
-                  </div>
-                ) : null}
-              </div>
-            )}
-          </CardContent>
-        </Card>
+        <ShopifyConnectionCard
+          storeId={store.id}
+          storeShopDomain={store.shopify_domain}
+          connection={shopify}
+          canManage={canManage}
+        />
 
         <Card>
           <CardHeader>

@@ -48,7 +48,17 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function ComingLater({ icon: Icon, title, text }: { icon: typeof ShoppingBagIcon; title: string; text: string }) {
+function ComingLater({
+  icon: Icon,
+  title,
+  text,
+  badge = "Coming soon",
+}: {
+  icon: typeof ShoppingBagIcon;
+  title: string;
+  text: string;
+  badge?: string;
+}) {
   return (
     <div className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-10 text-center">
       <span className="flex size-11 items-center justify-center rounded-full bg-muted">
@@ -56,7 +66,7 @@ function ComingLater({ icon: Icon, title, text }: { icon: typeof ShoppingBagIcon
       </span>
       <p className="font-medium">{title}</p>
       <p className="max-w-sm text-sm text-muted-foreground">{text}</p>
-      <Badge variant="secondary">Coming soon</Badge>
+      <Badge variant="secondary">{badge}</Badge>
     </div>
   );
 }
@@ -167,9 +177,10 @@ export function AddStoreWizard() {
             </CardHeader>
             <CardContent>
               <ComingLater
+                badge="After adding the store"
                 icon={ShoppingBagIcon}
-                title="Connect Shopify"
-                text="Shopify connection will be available in the next phase."
+                title="Connect Shopify next"
+                text="After you add the store, you'll connect Shopify from the store page and approve access in Shopify."
               />
             </CardContent>
           </>
@@ -236,7 +247,7 @@ export function AddStoreWizard() {
           <>
             <CardHeader>
               <CardTitle>Review</CardTitle>
-              <CardDescription>Check the details, then add the store. You can connect Shopify and Google Drive afterwards.</CardDescription>
+              <CardDescription>Check the details, then add the store. You&apos;ll connect Shopify on the next screen.</CardDescription>
             </CardHeader>
             <CardContent className="grid gap-4">
               {state?.error ? (
