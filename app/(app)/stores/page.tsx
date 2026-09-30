@@ -1,31 +1,46 @@
 import { PlusIcon, StoreIcon } from "lucide-react";
 import Link from "next/link";
 
-import { ComingSoon } from "@/components/shared/coming-soon";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { StoreTable } from "@/components/stores/store-table";
 import { Button } from "@/components/ui/button";
+import { listStores } from "@/lib/data/stores";
+import { hasPermission, requireWorkspace } from "@/lib/workspace";
 
 export const metadata = { title: "Stores" };
 
-export default function StoresPage() {
+export default async function StoresPage() {
+  const ctx = await requireWorkspace();
+  const stores = await listStores(ctx.workspace.workspaceId);
+  const canAdd = hasPermission(ctx, "manageStores");
+
+  const addButton = canAdd ? (
+    <Button asChild>
+      <Link href="/stores/new">
+        <PlusIcon />
+        Add Store
+      </Link>
+    </Button>
+  ) : null;
+
   return (
     <>
       <PageHeader
         title="Stores"
-        description="Connect and manage your Shopify stores."
-        actions={
-          <Button asChild>
-            <Link href="/stores/new">
-              <PlusIcon />
-              Add store
-            </Link>
-          </Button>
-        }
+        description="Shopify stores in this workspace."
+        actions={stores.length > 0 ? addButton : null}
       />
-      <ComingSoon
-        icon={StoreIcon}
-        text="Your connected Shopify stores will be listed here, each with its own Google Drive folder and sync settings."
-      />
+      {stores.length === 0 ? (
+        <EmptyState
+          icon={StoreIcon}
+          title="No stores connected."
+          description={canAdd ? "Add your first Shopify store." : "Ask a workspace owner or admin to add a store."}
+          action={addButton}
+        />
+      ) : (
+        <StoreTable stores={stores} />
+      )}
     </>
   );
 }

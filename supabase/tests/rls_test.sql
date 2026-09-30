@@ -20,6 +20,11 @@ begin
   if n = 5 then ok := ok + 1; r := r || 'PASS profiles auto-created on signup' || E'\n';
   else bad := bad + 1; r := r || 'FAIL profiles auto-created: ' || n || E'\n'; end if;
 
+  select count(*) into n from public.workspace_members m join public.workspaces w on w.id = m.workspace_id
+  where m.user_id in (a, b, c, d, e) and m.role = 'owner' and w.name = 'My Workspace' and w.created_by = m.user_id;
+  if n = 5 then ok := ok + 1; r := r || 'PASS signup creates "My Workspace" with user as owner' || E'\n';
+  else bad := bad + 1; r := r || 'FAIL default workspace/owner on signup: ' || n || E'\n'; end if;
+
   -- act as A
   perform set_config('role', 'authenticated', true);
   perform set_config('request.jwt.claims', json_build_object('sub', a, 'role', 'authenticated')::text, true);
@@ -54,7 +59,8 @@ begin
        + (select count(*) from public.sync_images) * 100
        + (select count(*) from public.activity_logs) * 10
        + (select count(*) from public.shopify_connections) into n;
-  if n = 1111111 then ok := ok + 1; r := r || 'PASS owner A sees exactly own workspace/store/settings/jobs/images/logs/connection' || E'\n';
+  -- A belongs to 2 workspaces: the default "My Workspace" + "Royal Sofa".
+  if n = 2111111 then ok := ok + 1; r := r || 'PASS owner A sees exactly own workspaces/store/settings/jobs/images/logs/connection' || E'\n';
   else bad := bad + 1; r := r || 'FAIL owner A visibility code ' || n || E'\n'; end if;
 
   select count(*) into n from public.profiles;

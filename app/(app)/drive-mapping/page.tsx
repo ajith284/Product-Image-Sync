@@ -1,15 +1,17 @@
 import { FolderTreeIcon } from "lucide-react";
 
-import { ComingSoon } from "@/components/shared/coming-soon";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { requireWorkspace } from "@/lib/workspace";
 
 export const metadata = { title: "Drive Mapping" };
 
-export default function Page() {
+export default async function Page() {
+  await requireWorkspace();
   return (
     <>
-      <PageHeader title="Drive Mapping" description="Choose the Google Drive folders that hold your product images." />
-      <ComingSoon icon={FolderTreeIcon} text="Once a store is connected, you'll pick a Google Drive root folder here and see which product folders were found." />
+      <PageHeader title="Drive Mapping" description="Google Drive folders that hold your product images." />
+      <EmptyState icon={FolderTreeIcon} title="Google Drive integration will be added in a later phase." />
     </>
   );
 }

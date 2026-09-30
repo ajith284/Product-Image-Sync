@@ -20,13 +20,7 @@ export default function SignupPage() {
         </>
       }
     >
-      <AuthForm
-        action={signup}
-        submitLabel="Create account"
-        pendingLabel="Creating account…"
-        passwordAutoComplete="new-password"
-        passwordHint="At least 8 characters."
-      />
+      <AuthForm action={signup} mode="signup" />
     </AuthCard>
   );
 }

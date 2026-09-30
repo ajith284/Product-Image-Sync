@@ -1,0 +1,69 @@
+import "server-only";
+
+import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+
+import { getShopifyConfig } from "@/lib/shopify/config";
+import type { ShopDomain } from "@/lib/shopify/types";
+
+/**
+ * OAuth PREPARATION for the authorization code grant (non-embedded app).
+ * Pure helpers only — there are no routes, no token exchange and no token
+ * storage yet. Planned flow (next phase):
+ *
+ *   1. /api/shopify/auth   verify user → workspace → owner/admin → store belongs
+ *                          to workspace; createOAuthState(); save stateHash in
+ *                          internal.oauth_states (10 min TTL); redirect to
+ *                          buildAuthorizeUrl().
+ *   2. Shopify approval screen.
+ *   3. /api/shopify/callback  isValidShopDomain(shop) + verifyShopifyHmac() +
+ *                          state hash lookup (unused, unexpired, same user/shop);
+ *                          POST /admin/oauth/access_token with expiring=1;
+ *                          hasRequiredScopes(); encrypt tokens → internal.integration_secrets;
+ *                          metadata → shopify_connections; store.status = connected.
+ */
+
+export const OAUTH_STATE_TTL_SECONDS = 10 * 60;
+
+/** Random, URL-safe state for CSRF protection. Only its hash is stored. */
+export function createOAuthState(): { state: string; stateHash: string } {
+  const state = randomBytes(32).toString("base64url");
+  return { state, stateHash: hashOAuthState(state) };
+}
+
+export function hashOAuthState(state: string): string {
+  return createHash("sha256").update(state, "utf8").digest("hex");
+}
+
+/**
+ * https://{shop}/admin/oauth/authorize?client_id&scope&redirect_uri&state
+ * No grant_options[] → offline (app-level) access, required for background sync.
+ */
+export function buildAuthorizeUrl(params: { shop: ShopDomain; state: string }): string {
+  const config = getShopifyConfig();
+  const url = new URL(`https://${params.shop}/admin/oauth/authorize`);
+  url.searchParams.set("client_id", config.clientId);
+  url.searchParams.set("scope", config.scopes.join(","));
+  url.searchParams.set("redirect_uri", config.redirectUri);
+  url.searchParams.set("state", params.state);
+  return url.toString();
+}
+
+/**
+ * Verifies the `hmac` Shopify adds to OAuth redirects: remove `hmac`, sort the
+ * remaining params, join as `key=value` with `&`, HMAC-SHA256 with the client
+ * secret, compare in constant time.
+ */
+export function verifyShopifyHmac(query: URLSearchParams, clientSecret: string = getShopifyConfig().clientSecret): boolean {
+  const received = query.get("hmac");
+  if (!received || !/^[a-f0-9]{64}$/i.test(received)) return false;
+
+  const message = [...query.entries()]
+    .filter(([key]) => key !== "hmac" && key !== "signature")
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([key, value]) => `${key}=${value}`)
+    .join("&");
+
+  const expected = createHmac("sha256", clientSecret).update(message).digest();
+  const actual = Buffer.from(received, "hex");
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}

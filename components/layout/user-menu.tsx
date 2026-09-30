@@ -1,9 +1,11 @@
 "use client";
 
-import { ChevronsUpDownIcon, LogOutIcon } from "lucide-react";
+import { LogOutIcon, SettingsIcon } from "lucide-react";
+import Link from "next/link";
 
 import { signOut } from "@/app/(auth)/actions";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,41 +14,44 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { SidebarMenu, SidebarMenuButton, SidebarMenuItem } from "@/components/ui/sidebar";
 
-export function UserMenu({ email }: { email: string | null }) {
-  const label = email ?? "Account";
-  const initial = label.charAt(0).toUpperCase();
+export type MenuUser = { fullName: string | null; email: string | null };
 
+export function userInitial(user: MenuUser) {
+  return (user.fullName || user.email || "?").trim().charAt(0).toUpperCase();
+}
+
+export function UserMenu({ user }: { user: MenuUser }) {
   return (
-    <SidebarMenu>
-      <SidebarMenuItem>
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <SidebarMenuButton size="lg" className="data-[state=open]:bg-sidebar-accent">
-              <Avatar className="size-8 rounded-md">
-                <AvatarFallback className="rounded-md">{initial}</AvatarFallback>
-              </Avatar>
-              <span className="truncate text-sm">{label}</span>
-              <ChevronsUpDownIcon className="ml-auto size-4" />
-            </SidebarMenuButton>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="top" align="start" className="w-(--radix-dropdown-menu-trigger-width) min-w-56">
-            <DropdownMenuLabel className="truncate font-normal text-muted-foreground">
-              {label}
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <form action={signOut}>
-              <DropdownMenuItem asChild>
-                <button type="submit" className="w-full">
-                  <LogOutIcon />
-                  Sign out
-                </button>
-              </DropdownMenuItem>
-            </form>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      </SidebarMenuItem>
-    </SidebarMenu>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" className="rounded-full" aria-label="Account menu">
+          <Avatar className="size-8">
+            <AvatarFallback>{userInitial(user)}</AvatarFallback>
+          </Avatar>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-60">
+        <DropdownMenuLabel className="grid font-normal">
+          <span className="truncate font-medium">{user.fullName || "Your account"}</span>
+          <span className="truncate text-xs text-muted-foreground">{user.email}</span>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem asChild>
+          <Link href="/settings">
+            <SettingsIcon />
+            Settings
+          </Link>
+        </DropdownMenuItem>
+        <form action={signOut}>
+          <DropdownMenuItem asChild>
+            <button type="submit" className="w-full">
+              <LogOutIcon />
+              Log out
+            </button>
+          </DropdownMenuItem>
+        </form>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }

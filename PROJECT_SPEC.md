@@ -153,13 +153,14 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 
 **Never automatically continue to another phase.**
 
-## 14. Current state (updated 2026-09-29)
+## 14. Current state (updated 2026-09-30)
 
 ### Phase log
 - **Phase 0 — Audit:** repo and Supabase were empty; this spec created.
-- **Phase 1 — Foundation (done):** Next.js 16.3 (App Router, Turbopack), React 19, TypeScript, Tailwind 4 (CSS-first config in `app/globals.css`), shadcn/ui (new-york, neutral), Lucide, `@supabase/ssr`. Root-level layout: `app/`, `components/{ui,layout,shared,auth}`, `lib/`, `lib/supabase/`, `hooks/`, `proxy.ts`, `public/`. Email/password auth (login, signup, email-link confirm, sign out). `proxy.ts` refreshes the session and guards routes; `app/(app)/layout.tsx` re-verifies with `getClaims()`. Shell: sidebar (`components/layout/app-sidebar.tsx`), header (`components/layout/app-header.tsx`), placeholder pages: Dashboard, Stores, Add Store, Drive Mapping, Sync Jobs, Review Center, Activity, Settings. `.env.example` lists variable names only (public vars). `lib/env.server.ts` (`server-only`) is the place for future secrets. Security headers in `next.config.ts`. No database objects created. Verified: fresh `npm install`, `npm run typecheck`, `npm run build`, `npm run dev`.
-
-- **Phase 2 — Database + RLS (done):** migrations `supabase/migrations/20260929155910_initial_schema.sql` and `20260929155952_rls_and_grants.sql` applied to `xkzccfxrixpyozfhamdh`. 48/48 RLS/constraint tests pass (`supabase/tests/rls_test.sql`, self-rolling-back). Typed clients via `lib/supabase/database.types.ts`; DB enum values in `lib/supabase/constants.ts`.
+- **Phase 1 — Foundation (done):** Next.js 16.3 (App Router, Turbopack), React 19, TypeScript, Tailwind 4 (CSS-first config in `app/globals.css`), shadcn/ui (new-york, neutral), Lucide, `@supabase/ssr`. Root-level layout: `app/`, `components/{ui,layout,shared,auth}`, `lib/`, `lib/supabase/`, `hooks/`, `proxy.ts`, `public/`. Email/password auth (login, signup, email-link confirm, sign out). `proxy.ts` refreshes the session and guards routes; `app/(app)/layout.tsx` re-verifies with `getClaims()`. Shell: sidebar + header (renamed in Phase 3 to `components/layout/sidebar.tsx` / `header.tsx`), placeholder pages: Dashboard, Stores, Add Store, Drive Mapping, Sync Jobs, Review Center, Activity, Settings. `.env.example` lists variable names only (public vars). `lib/env.server.ts` (`server-only`) is the place for future secrets. Security headers in `next.config.ts`. No database objects created. Verified: fresh `npm install`, `npm run typecheck`, `npm run build`, `npm run dev`.
+- **Phase 2 (Prompt 1) — Database + RLS (done):** migrations `supabase/migrations/20260929155910_initial_schema.sql` and `20260929155952_rls_and_grants.sql` applied to `xkzccfxrixpyozfhamdh`. 48/48 RLS/constraint tests pass (`supabase/tests/rls_test.sql`, self-rolling-back). Typed clients via `lib/supabase/database.types.ts`; DB enum values in `lib/supabase/constants.ts`.
+- **Phase 3 (Prompt 2) — Auth, onboarding, app shell (done):** migration `20260929162040_default_workspace_on_signup.sql` (sign-up trigger now creates profile + "My Workspace" + owner membership atomically). Sign-up collects full name. Workspace context resolved server-side (`lib/workspace.ts`: `requireWorkspace()` = session → membership; `hasPermission()` for role checks; selected workspace in httpOnly cookie `pis_workspace`, always re-validated against membership). `/onboarding` for users with no workspace. Real-data pages: Dashboard (stats), Stores (table/cards), Add Store wizard (creates store in `setup` status; no integrations), Store details `/stores/[id]` (scoped to current workspace), Settings (profile name, workspace name, members). Placeholders: Drive Mapping, Sync Jobs, Review, Activity. Expired sessions → `/login?reason=expired`. 49/49 DB tests pass.
+- **Phase 4 (Prompt 3) — Shopify foundation (done):** `lib/shopify/{config,scopes,domain,client,oauth,types}.ts`, `docs/shopify-setup.md`, Vitest (`npm test`, 69 tests). Decisions (checked on shopify.dev 2026-09-30): standalone non-embedded app · authorization code grant · **expiring offline tokens** (`expiring=1`; 1 h access / 90-day refresh; mandatory for public apps created ≥ 2026-04-01) · public **unlisted** distribution · API version from `SHOPIFY_API_VERSION` (latest stable `2026-07`) · scopes exactly `read_products,write_products,write_files`. OAuth routes planned at `/api/shopify/auth` and `/api/shopify/callback` (not built). No DB changes.
 
 ### Database (Phase 2)
 - **Schemas:** `public` (API-exposed, RLS on every table) · `private` (RLS helper functions; not exposed) · `internal` (server-only tables `integration_secrets`, `oauth_states`; not exposed, no USAGE for anon/authenticated, RLS on with no policies → service_role only).
@@ -173,6 +174,11 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 - **Secrets:** tokens are encrypted by the app (server-side key, AES-GCM planned) before insert into `internal.integration_secrets`; server reads/writes with the secret key only. Never expose `internal` in API settings.
 - **After every migration:** regenerate `lib/supabase/database.types.ts`, rerun `supabase/tests/rls_test.sql`, run security advisors.
 
+### Open items for the Shopify OAuth phase (Prompt 4)
+- Add `refresh_token_expires_at` to `internal.integration_secrets` (expiring tokens have a 90-day refresh token).
+- Decide one active connection per shop across ALL workspaces (unique `shopify_connections.shop_domain` where connected): re-authorizing the same shop from another workspace rotates/retires the first workspace's tokens.
+- Implement token encryption (AES-256-GCM with `SHOPIFY_TOKEN_ENCRYPTION_KEY`) and a refresh-before-use helper; serialize refreshes per shop (rotation invalidates the old refresh token).
+
 ### Conventions established in Phase 1
 - Server Supabase client: `@/lib/supabase/server` (per request, user-scoped, RLS applies). Browser client: `@/lib/supabase/client`.
 - Auth check: `requireUser()` / `getSessionUser()` from `@/lib/auth`. Never trust `getSession()` on the server.
@@ -181,11 +187,26 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 - Nav items live in `lib/navigation.ts`.
 - Next.js 16: `proxy.ts` replaces `middleware.ts`. Read `node_modules/next/dist/docs/` for current APIs.
 
+### Conventions established in Phase 3
+- Every protected page/action starts with `requireWorkspace()`; writes use `ctx.workspace.workspaceId` from the server context, never IDs from forms/URLs.
+- UI permission map in `lib/permissions.ts` mirrors RLS (owner/admin manage stores & workspace; member read + mappings).
+- Data access helpers in `lib/data/*` (server-only, RLS-scoped, session errors → login redirect).
+- Friendly error mapping in `lib/errors.ts`; never show raw DB/JWT errors.
+- Components: `components/layout/{sidebar,header,user-menu,workspace-switcher}`, `components/dashboard/stat-card`, `components/shared/{empty-state,page-header}`, `components/stores/{store-table,store-card,store-status-badge,setup-stepper,add-store-wizard}`, `components/settings/name-form`.
+
+### Conventions established in Phase 4
+- All Shopify server code lives in `lib/shopify/*` and imports `server-only`, except `domain.ts` (pure, shared with the Add Store form).
+- Read config only via `getShopifyConfig()` inside handlers (throws `ShopifyConfigError` naming missing vars); never at module load.
+- Validate shop domains with `normalizeShopDomain()` (user input) / `isValidShopDomain()` (Shopify-provided values).
+- Show `ShopifyApiError.userMessage` to customers, never raw API errors.
+- Unit tests live in `tests/*.test.ts` (Vitest, `server-only` stubbed).
+
 ### Environment
 - **Local repo** `C:\Users\ajith\Desktop\shopify-image-uploaded-automation` — branch `main`, remote `origin` = GitHub.
 - **GitHub** `ajith284/product-image-sync` (public).
-- **Supabase** `xkzccfxrixpyozfhamdh` — schema from Phase 2 applied; no data. No storage buckets.
-- **`.mcp.json`** still points at a different Supabase project (`oabbngivgsckcfdaqhbp`) — fix before local DB work.
+- **Supabase** `xkzccfxrixpyozfhamdh` — migrations through Phase 3 applied. No storage buckets.
+- **Supabase Data API (confirmed 2026-09-29):** exposed schemas = `public`, `graphql_public` only. `internal` and `private` are NOT exposed. Automatic table exposure is disabled.
+- **`.mcp.json`** points at `xkzccfxrixpyozfhamdh` (fixed).
 
 ### Not built yet
-Workspace creation/onboarding UI, member invites, password reset, Store Details page, Shopify OAuth, Google Drive OAuth, token encryption, sync engine, n8n endpoints.
+Member invites, password reset, Shopify OAuth routes + token storage/refresh, Google Drive OAuth, sync engine, n8n endpoints.

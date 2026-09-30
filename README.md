@@ -24,7 +24,7 @@ npm run dev                  # http://localhost:3000
 | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Supabase → Project Settings → API Keys → Publishable key (`sb_publishable_…`) |
 | `NEXT_PUBLIC_SITE_URL` | Base URL of this app, e.g. `http://localhost:3000` |
 
-Only browser-safe values exist so far. Server secrets are added in later phases (without the `NEXT_PUBLIC_` prefix).
+Shopify variables (`SHOPIFY_*`) are server-only — see [docs/shopify-setup.md](docs/shopify-setup.md).
 
 ## Scripts
 
@@ -35,6 +35,7 @@ Only browser-safe values exist so far. Server secrets are added in later phases 
 | `npm run start` | Serve the production build |
 | `npm run lint` | ESLint |
 | `npm run typecheck` | Generate route types + `tsc --noEmit` |
+| `npm test` | Unit tests (Vitest) |
 
 ## Structure
 

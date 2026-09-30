@@ -1,5 +1,6 @@
 "use client";
 
+import { MailCheckIcon } from "lucide-react";
 import { useActionState } from "react";
 
 import type { AuthFormState } from "@/app/(auth)/actions";
@@ -10,26 +11,23 @@ import { Label } from "@/components/ui/label";
 
 type Props = {
   action: (state: AuthFormState, formData: FormData) => Promise<AuthFormState>;
-  submitLabel: string;
-  pendingLabel: string;
-  passwordAutoComplete: "current-password" | "new-password";
-  passwordHint?: string;
+  mode: "login" | "signup";
   next?: string;
+  notice?: string;
 };
 
-export function AuthForm({
-  action,
-  submitLabel,
-  pendingLabel,
-  passwordAutoComplete,
-  passwordHint,
-  next,
-}: Props) {
+function FieldError({ message }: { message?: string }) {
+  return message ? <p className="text-sm text-destructive">{message}</p> : null;
+}
+
+export function AuthForm({ action, mode, next, notice }: Props) {
   const [state, formAction, pending] = useActionState(action, undefined);
+  const isSignup = mode === "signup";
 
   if (state?.message) {
     return (
       <Alert>
+        <MailCheckIcon />
         <AlertDescription>{state.message}</AlertDescription>
       </Alert>
     );
@@ -43,6 +41,27 @@ export function AuthForm({
         <Alert variant="destructive">
           <AlertDescription>{state.error}</AlertDescription>
         </Alert>
+      ) : notice ? (
+        <Alert>
+          <AlertDescription>{notice}</AlertDescription>
+        </Alert>
+      ) : null}
+
+      {isSignup ? (
+        <div className="grid gap-2">
+          <Label htmlFor="fullName">Full name</Label>
+          <Input
+            id="fullName"
+            name="fullName"
+            autoComplete="name"
+            placeholder="Ajith Kumar"
+            defaultValue={state?.values?.fullName}
+            aria-invalid={Boolean(state?.fieldErrors?.fullName)}
+            disabled={pending}
+            required
+          />
+          <FieldError message={state?.fieldErrors?.fullName} />
+        </div>
       ) : null}
 
       <div className="grid gap-2">
@@ -53,13 +72,12 @@ export function AuthForm({
           type="email"
           autoComplete="email"
           placeholder="you@company.com"
-          defaultValue={state?.email}
+          defaultValue={state?.values?.email}
           aria-invalid={Boolean(state?.fieldErrors?.email)}
+          disabled={pending}
           required
         />
-        {state?.fieldErrors?.email ? (
-          <p className="text-sm text-destructive">{state.fieldErrors.email}</p>
-        ) : null}
+        <FieldError message={state?.fieldErrors?.email} />
       </div>
 
       <div className="grid gap-2">
@@ -68,19 +86,26 @@ export function AuthForm({
           id="password"
           name="password"
           type="password"
-          autoComplete={passwordAutoComplete}
+          autoComplete={isSignup ? "new-password" : "current-password"}
           aria-invalid={Boolean(state?.fieldErrors?.password)}
+          disabled={pending}
           required
         />
         {state?.fieldErrors?.password ? (
-          <p className="text-sm text-destructive">{state.fieldErrors.password}</p>
-        ) : passwordHint ? (
-          <p className="text-sm text-muted-foreground">{passwordHint}</p>
+          <FieldError message={state.fieldErrors.password} />
+        ) : isSignup ? (
+          <p className="text-sm text-muted-foreground">At least 8 characters.</p>
         ) : null}
       </div>
 
       <Button type="submit" className="w-full" disabled={pending}>
-        {pending ? pendingLabel : submitLabel}
+        {pending
+          ? isSignup
+            ? "Creating account…"
+            : "Signing in…"
+          : isSignup
+            ? "Create account"
+            : "Sign in"}
       </Button>
     </form>
   );

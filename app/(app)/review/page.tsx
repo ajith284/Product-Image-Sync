@@ -1,15 +1,17 @@
 import { InboxIcon } from "lucide-react";
 
-import { ComingSoon } from "@/components/shared/coming-soon";
+import { EmptyState } from "@/components/shared/empty-state";
 import { PageHeader } from "@/components/shared/page-header";
+import { requireWorkspace } from "@/lib/workspace";
 
-export const metadata = { title: "Review Center" };
+export const metadata = { title: "Review" };
 
-export default function Page() {
+export default async function Page() {
+  await requireWorkspace();
   return (
     <>
-      <PageHeader title="Review Center" description="Resolve products that need your attention before images can upload." />
-      <ComingSoon icon={InboxIcon} text="Folders with no matching product, more than one matching product, or failed uploads will appear here for you to resolve." />
+      <PageHeader title="Review" description="Products that need your attention before images can upload." />
+      <EmptyState icon={InboxIcon} title="No items require review." />
     </>
   );
 }

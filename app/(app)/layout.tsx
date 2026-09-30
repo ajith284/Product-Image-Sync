@@ -1,18 +1,22 @@
-import { AppHeader } from "@/components/layout/app-header";
-import { AppSidebar } from "@/components/layout/app-sidebar";
+import { AppHeader } from "@/components/layout/header";
+import { AppSidebar } from "@/components/layout/sidebar";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
-import { requireUser } from "@/lib/auth";
+import { requireWorkspace } from "@/lib/workspace";
 
 export default async function AppLayout({ children }: LayoutProps<"/">) {
-  // Defense in depth: the proxy redirects early, but every protected render verifies too.
-  const user = await requireUser();
+  // Server-side: session → workspace membership. The proxy redirects early,
+  // but every protected render verifies again; RLS is the final check.
+  const { user, memberships, workspace } = await requireWorkspace();
+  const menuUser = { fullName: user.fullName, email: user.email };
 
   return (
     <SidebarProvider>
-      <AppSidebar email={user.email} />
+      <AppSidebar user={menuUser} memberships={memberships} workspace={workspace} />
       <SidebarInset>
-        <AppHeader />
-        <main className="flex flex-1 flex-col gap-6 p-4 md:p-8">{children}</main>
+        <AppHeader user={menuUser} workspace={workspace} />
+        <main className="mx-auto flex w-full max-w-6xl flex-1 flex-col gap-6 p-4 md:p-8">
+          {children}
+        </main>
       </SidebarInset>
     </SidebarProvider>
   );

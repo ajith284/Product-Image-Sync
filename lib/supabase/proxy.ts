@@ -20,6 +20,17 @@ export async function updateSession(request: NextRequest) {
     return response;
   }
 
+  // Remember whether the browser *had* a session cookie, so an invalid one can be
+  // reported as "session expired" rather than a plain sign-in prompt.
+  const hadSessionCookie = request.cookies
+    .getAll()
+    .some(
+      (c) =>
+        c.name.startsWith("sb-") &&
+        c.name.includes("-auth-token") &&
+        !c.name.endsWith("-code-verifier"),
+    );
+
   const supabase = createServerClient(
     publicEnv.supabaseUrl,
     publicEnv.supabasePublishableKey,
@@ -44,10 +55,13 @@ export async function updateSession(request: NextRequest) {
   const isSignedIn = Boolean(data?.claims?.sub);
   const { pathname, search } = request.nextUrl;
 
-  const redirectTo = (path: string, next?: string) => {
+  const redirectTo = (path: string, params: Record<string, string | undefined> = {}) => {
     const url = request.nextUrl.clone();
     url.pathname = path;
-    url.search = next ? `?next=${encodeURIComponent(next)}` : "";
+    url.search = "";
+    for (const [key, value] of Object.entries(params)) {
+      if (value) url.searchParams.set(key, value);
+    }
     const redirect = NextResponse.redirect(url);
     // Keep refreshed session cookies on the redirect.
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
@@ -56,7 +70,7 @@ export async function updateSession(request: NextRequest) {
 
   if (!isSignedIn && !isPublicPath(pathname)) {
     const next = pathname === "/" ? undefined : `${pathname}${search}`;
-    return redirectTo(LOGIN_PATH, next);
+    return redirectTo(LOGIN_PATH, { next, reason: hadSessionCookie ? "expired" : undefined });
   }
 
   if (isSignedIn && (pathname === "/" || isGuestOnlyPath(pathname))) {
