@@ -17,6 +17,15 @@ function matches(pathname: string, prefixes: string[]) {
   return prefixes.some((p) => pathname === p || pathname.startsWith(`${p}/`));
 }
 
+/**
+ * JSON API routes: a signed-out request gets 401 JSON instead of a redirect to
+ * the login page. (The Shopify OAuth callback is a browser redirect target and
+ * keeps the normal login redirect.)
+ */
+const JSON_API_PREFIXES = ["/api/shopify/products"];
+
+export const isJsonApiPath = (pathname: string) => matches(pathname, JSON_API_PREFIXES);
+
 export const isPublicPath = (pathname: string) => matches(pathname, PUBLIC_PREFIXES);
 export const isGuestOnlyPath = (pathname: string) =>
   matches(pathname, GUEST_ONLY_PREFIXES);

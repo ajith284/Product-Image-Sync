@@ -6,6 +6,7 @@ import {
   DEFAULT_AUTHENTICATED_PATH,
   LOGIN_PATH,
   isGuestOnlyPath,
+  isJsonApiPath,
   isPublicPath,
 } from "@/lib/routes";
 
@@ -67,6 +68,13 @@ export async function updateSession(request: NextRequest) {
     response.cookies.getAll().forEach((c) => redirect.cookies.set(c));
     return redirect;
   };
+
+  if (!isSignedIn && isJsonApiPath(pathname)) {
+    return NextResponse.json(
+      { error: "Please sign in again." },
+      { status: 401, headers: { "Cache-Control": "no-store" } },
+    );
+  }
 
   if (!isSignedIn && !isPublicPath(pathname)) {
     const next = pathname === "/" ? undefined : `${pathname}${search}`;

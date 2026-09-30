@@ -14,6 +14,9 @@ describe("normalizeShopDomain — valid input", () => {
     ["my-store", "my-store.myshopify.com"],
     ["https://admin.shopify.com/store/my-store/products", "my-store.myshopify.com"],
     ["store123.myshopify.com", "store123.myshopify.com"],
+    // Reported live input (handle with digits and a hyphen)
+    ["psvft1-0d.myshopify.com", "psvft1-0d.myshopify.com"],
+    [" https://PSVFT1-0D.myshopify.com/ ", "psvft1-0d.myshopify.com"],
   ])("%s → %s", (input, expected) => {
     expect(normalizeShopDomain(input)).toBe(expected);
   });

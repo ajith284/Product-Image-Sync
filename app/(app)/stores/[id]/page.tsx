@@ -2,6 +2,7 @@ import { AlertTriangleIcon, CheckCircle2Icon, HardDriveIcon, RefreshCwIcon, type
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { ProductSearchTest } from "@/components/stores/product-search-test";
 import { ShopifyConnectionCard } from "@/components/stores/shopify-connection-card";
 import { StoreStatusBadge } from "@/components/stores/store-status-badge";
 import { formatDate } from "@/components/stores/types";
@@ -42,6 +43,8 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
   if (!details) notFound();
   const { store, shopify, drive, jobs } = details;
   const canManage = hasPermission(ctx, "manageStores");
+  // Temporary development tool: on in `npm run dev`; in production only with SHOW_DEV_TOOLS=true.
+  const showDevTools = process.env.NODE_ENV !== "production" || process.env.SHOW_DEV_TOOLS === "true";
 
   return (
     <>
@@ -141,6 +144,8 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
             )}
           </CardContent>
         </Card>
+
+        {showDevTools && shopify?.connection_status === "connected" ? <ProductSearchTest storeId={store.id} /> : null}
       </div>
     </>
   );
