@@ -75,7 +75,7 @@ export async function getStoreDetails(workspaceId: string, storeId: string) {
   );
   if (!storeRes.data) return null;
 
-  const [shopify, drive, jobs] = await Promise.all([
+  const [shopify, drive, jobs, roots] = await Promise.all([
     supabase
       .from("shopify_connections")
       .select("connection_status, shop_domain, installed_at, last_verified_at, last_error, refresh_token_expires_at, disconnected_at")
@@ -83,7 +83,7 @@ export async function getStoreDetails(workspaceId: string, storeId: string) {
       .maybeSingle(),
     supabase
       .from("google_drive_connections")
-      .select("connection_status, google_account_email, root_folder_name, connected_at, last_verified_at, last_error, disconnected_at")
+      .select("connection_status, google_account_id, google_account_email, root_folder_name, connected_at, last_verified_at, last_error, disconnected_at")
       .eq("store_id", storeId)
       .maybeSingle(),
     supabase
@@ -92,17 +92,36 @@ export async function getStoreDetails(workspaceId: string, storeId: string) {
       .eq("store_id", storeId)
       .order("created_at", { ascending: false })
       .limit(5),
+    supabase
+      .from("google_drive_category_roots")
+      .select("folder_id, folder_name, google_account_id, created_at")
+      .eq("store_id", storeId)
+      .order("created_at", { ascending: true }),
   ]);
   check(shopify, "Shopify connection");
   check(drive, "Google Drive connection");
   check(jobs, "sync jobs");
+  check(roots, "Google Drive category folders");
+
+  // Only folders selected with the currently connected Google account count.
+  const accountId = drive.data?.google_account_id ?? null;
+  const categoryRoots = (roots.data ?? [])
+    .filter((r) => accountId && r.google_account_id === accountId)
+    .map((r) => ({ id: r.folder_id, name: r.folder_name }));
 
   return {
     store: storeRes.data,
     shopify: shopify.data,
-    drive: drive.data,
+    // google_account_id is only used for the filter above; it never reaches the browser.
+    drive: drive.data ? { ...withoutAccountId(drive.data), category_roots: categoryRoots } : null,
     jobs: jobs.data ?? [],
   };
+}
+
+function withoutAccountId<T extends { google_account_id?: unknown }>(row: T): Omit<T, "google_account_id"> {
+  const copy = { ...row };
+  delete copy.google_account_id;
+  return copy;
 }
 
 export async function listMembers(workspaceId: string) {

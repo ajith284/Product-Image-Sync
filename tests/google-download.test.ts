@@ -221,6 +221,7 @@ function setup(
       googleAccountId: "google-sub-123",
       rootFolderId: ROOT,
       rootFolderName: "Sofa",
+      categoryRoots: [{ id: ROOT, name: "Sofa" }],
       allowedImageTypes: ["jpg", "jpeg", "png", "webp"],
       ignoredFolders: ["OG"],
       ...over.ctx,
@@ -232,6 +233,7 @@ function setup(
       googleAccountId: "other",
       rootFolderId: "otherRoot000001",
       rootFolderName: "Other",
+      categoryRoots: [{ id: "otherRoot000001", name: "Other" }],
       allowedImageTypes: ["png"],
       ignoredFolders: ["OG"],
     },
@@ -334,7 +336,7 @@ describe("downloadDriveImage", () => {
   });
 
   it("9. root not selected → GOOGLE_DRIVE_ROOT_NOT_SELECTED; root gone → DRIVE_ROOT_INACCESSIBLE", async () => {
-    const a = setup(fakeDrive(), { ctx: { rootFolderId: null } });
+    const a = setup(fakeDrive(), { ctx: { rootFolderId: null, categoryRoots: [] } });
     expect(await code(downloadDriveImage(ctx("imagePng00000001"), a.deps))).toBe("GOOGLE_DRIVE_ROOT_NOT_SELECTED");
     expect(a.drive.calls).toHaveLength(0);
 
@@ -454,6 +456,19 @@ describe("downloadDriveImage", () => {
     const mixed = setup(fakeDrive(), { credsWorkspace: OTHER_WS });
     expect(await code(downloadDriveImage(ctx("imagePng00000001"), mixed.deps))).toBe("STORE_NOT_FOUND");
     expect(mixed.drive.calls.some((c) => c.alt === "media")).toBe(false);
+  });
+
+  it("multiple category roots: a file under ANY connected root downloads; others stay refused", async () => {
+    const both = setup(fakeDrive(), { ctx: { categoryRoots: [{ id: ROOT, name: "Sofa" }, { id: "elsewhere0000001", name: "Elsewhere" }] } });
+    expect((await downloadDriveImage(ctx("secretPng0000001"), both.deps)).parentFolderId).toBe("elsewhere0000001");
+    expect((await downloadDriveImage(ctx("imagePng00000001"), both.deps)).parentFolderId).toBe("milanoFolder0001");
+    const onlyElsewhere = setup(fakeDrive(), { ctx: { categoryRoots: [{ id: "elsewhere0000001", name: "Elsewhere" }] } });
+    expect(await code(downloadDriveImage(ctx("imagePng00000001"), onlyElsewhere.deps))).toBe("DRIVE_FILE_OUTSIDE_ROOT");
+  });
+
+  it("stores with only the Prompt 7 single root (no category rows) keep working", async () => {
+    const legacy = setup(fakeDrive(), { ctx: { categoryRoots: [] } });
+    expect((await downloadDriveImage(ctx("imagePng00000001"), legacy.deps)).sha256).toBe(sha(PNG));
   });
 
   it("refreshes an expiring token through the existing connection service", async () => {

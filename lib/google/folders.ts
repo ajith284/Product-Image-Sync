@@ -313,5 +313,14 @@ export async function selectRootFolder(
   });
   // The connection changed meanwhile (disconnected / other Google account): don't attach the folder.
   if (!saved) throw new GoogleFlowError("google_not_connected", { storeId });
+  // Prompt 12: the selected root is also one of the store's category roots (idempotent).
+  await deps.repo.addCategoryRoot({
+    storeId,
+    workspaceId: input.workspaceId,
+    userId: input.userId,
+    googleAccountId: creds.googleAccountId,
+    folderId: folder.id,
+    folderName: folder.name,
+  });
   return { id: folder.id, name: folder.name };
 }

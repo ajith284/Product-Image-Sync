@@ -4,17 +4,22 @@ import {
   AlertTriangleIcon,
   CheckCircle2Icon,
   FolderIcon,
+  FolderPlusIcon,
   HardDriveIcon,
   Loader2Icon,
   RefreshCwIcon,
   ShieldCheckIcon,
   UnplugIcon,
+  XIcon,
 } from "lucide-react";
+import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { toast } from "sonner";
 
 import {
   connectGoogleDrive,
   disconnectGoogleDrive,
+  removeGoogleCategoryRoot,
   verifyGoogleDrive,
   type GoogleActionState,
 } from "@/app/(app)/stores/[id]/google-actions";
@@ -41,6 +46,8 @@ export type GoogleDriveConnectionView = {
   connection_status: string;
   google_account_email: string | null;
   root_folder_name: string | null;
+  /** Connected CATEGORY folders (e.g. "Sofa image", "Sofa bed image"). */
+  category_roots: { id: string; name: string }[];
   connected_at: string | null;
   last_verified_at: string | null;
   last_error: string | null;
@@ -52,6 +59,80 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
     <div className="grid gap-0.5">
       <dt className="text-xs text-muted-foreground">{label}</dt>
       <dd className="text-sm font-medium break-words">{children}</dd>
+    </div>
+  );
+}
+
+/**
+ * Category folders ("Sofa image", "Sofa bed image", …). Code folders (SOF-001) and
+ * product folders (Milano) inside them are found automatically by the scanner.
+ */
+function CategoryFolders({
+  storeId,
+  roots,
+  canManage,
+  onAdd,
+}: {
+  storeId: string;
+  roots: { id: string; name: string }[];
+  canManage: boolean;
+  onAdd: () => void;
+}) {
+  const router = useRouter();
+  const [removing, startRemove] = useTransition();
+  const [removingId, setRemovingId] = useState<string | null>(null);
+  const remove = (id: string) => {
+    setRemovingId(id);
+    startRemove(async () => {
+      const r = await removeGoogleCategoryRoot(storeId, id);
+      if (r?.error) toast.error(r.error);
+      else toast.success(r?.message ?? "Category folder disconnected.");
+      setRemovingId(null);
+      router.refresh();
+    });
+  };
+  return (
+    <div className="grid gap-2 rounded-lg border p-3">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="grid gap-0.5">
+          <span className="text-sm font-medium">Category folders</span>
+          <span className="text-xs text-muted-foreground">
+            Connect folders like &quot;Sofa image&quot;. Code folders (SOF-001) and product folders (Milano) inside are found
+            automatically.
+          </span>
+        </div>
+        {canManage ? (
+          <Button size="sm" variant={roots.length ? "outline" : "default"} onClick={onAdd}>
+            <FolderPlusIcon /> Add category folder
+          </Button>
+        ) : null}
+      </div>
+      {roots.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No category folder connected yet.</p>
+      ) : (
+        <ul className="grid gap-1">
+          {roots.map((r) => (
+            <li key={r.id} className="flex items-center justify-between gap-2 rounded-md bg-muted/40 px-2 py-1.5">
+              <span className="flex min-w-0 items-center gap-2">
+                <FolderIcon className="size-4 shrink-0 text-sky-600" />
+                <span className="text-sm font-medium break-all">{r.name}</span>
+              </span>
+              {canManage ? (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="text-muted-foreground"
+                  aria-label={`Disconnect ${r.name}`}
+                  disabled={removing}
+                  onClick={() => remove(r.id)}
+                >
+                  {removingId === r.id ? <Loader2Icon className="animate-spin" /> : <XIcon />}
+                </Button>
+              ) : null}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
@@ -122,26 +203,20 @@ export function GoogleDriveCard({
                 {connection.last_verified_at ? formatDate(connection.last_verified_at) : "Not yet"}
               </Row>
             </dl>
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <FolderIcon className={connection.root_folder_name ? "size-4 shrink-0 text-sky-600" : "size-4 shrink-0 text-muted-foreground"} />
-                <div className="grid min-w-0 gap-0.5">
-                  <span className="text-xs text-muted-foreground">Root folder</span>
-                  <span className="text-sm font-medium break-all">{connection.root_folder_name ?? "Not selected"}</span>
-                </div>
-              </div>
-              {canManage && connected ? (
-                <Button size="sm" variant={connection.root_folder_name ? "outline" : "default"} onClick={() => setPickerOpen(true)}>
-                  {connection.root_folder_name ? "Change folder" : "Select folder"}
-                </Button>
-              ) : null}
-            </div>
+            <CategoryFolders
+              storeId={storeId}
+              roots={connection.category_roots ?? []}
+              canManage={canManage && connected}
+              onAdd={() => setPickerOpen(true)}
+            />
             {canManage && connected && pickerOpen ? (
               <DriveFolderPicker
                 storeId={storeId}
                 open={pickerOpen}
                 onOpenChange={setPickerOpen}
-                currentRootName={connection.root_folder_name}
+                currentRootName={null}
+                mode="category"
+                connectedRootIds={(connection.category_roots ?? []).map((r) => r.id)}
               />
             ) : null}
           </>

@@ -84,6 +84,8 @@ export function fakeGoogleRepo(overrides: Partial<GoogleRepository> = {}) {
     /** The ONE connection row's root folder (updates replace it; nothing is ever inserted). */
     root: { id: string; name: string } | null;
     rootUpdates: number;
+    /** google_drive_category_roots rows (Prompt 12). */
+    categoryRoots: { folderId: string; folderName: string; googleAccountId: string }[];
   } = {
     consumed: { status: "ok", userId: G_USER_ID, workspaceId: G_WORKSPACE_ID, storeId: G_STORE_ID },
     begun: [],
@@ -93,6 +95,7 @@ export function fakeGoogleRepo(overrides: Partial<GoogleRepository> = {}) {
     disconnected: 0,
     root: null,
     rootUpdates: 0,
+    categoryRoots: [],
   };
 
   const repo: GoogleRepository = {
@@ -144,6 +147,26 @@ export function fakeGoogleRepo(overrides: Partial<GoogleRepository> = {}) {
       state.root = { id: input.folderId, name: input.folderName };
       state.rootUpdates += 1;
       return true;
+    }),
+    addCategoryRoot: vi.fn(async (input) => {
+      // Mirrors google_add_category_root: connected + same account, idempotent per folder.
+      if (!state.creds || state.creds.connectionStatus !== "connected" || state.creds.googleAccountId !== input.googleAccountId) {
+        return false;
+      }
+      const existing = state.categoryRoots.find((r) => r.folderId === input.folderId);
+      if (existing) Object.assign(existing, { folderName: input.folderName, googleAccountId: input.googleAccountId });
+      else state.categoryRoots.push({ folderId: input.folderId, folderName: input.folderName, googleAccountId: input.googleAccountId });
+      if (!state.root) state.root = { id: input.folderId, name: input.folderName };
+      return true;
+    }),
+    removeCategoryRoot: vi.fn(async (input) => {
+      const before = state.categoryRoots.length;
+      state.categoryRoots = state.categoryRoots.filter((r) => r.folderId !== input.folderId);
+      if (state.root?.id === input.folderId) {
+        const next = state.categoryRoots[0];
+        state.root = next ? { id: next.folderId, name: next.folderName } : null;
+      }
+      return state.categoryRoots.length < before;
     }),
     ...overrides,
   };

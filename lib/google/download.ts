@@ -40,6 +40,8 @@ export const PERMANENT_DOWNLOAD_ERRORS = [
   "IMAGE_TOO_LARGE",
   "INVALID_IMAGE",
   "PERMISSION_DENIED",
+  "CATEGORY_ROOT_NOT_CONNECTED",
+  "SHOPIFY_NOT_CONNECTED",
 ] as const;
 
 export const RETRYABLE_DOWNLOAD_ERRORS = [
@@ -67,6 +69,8 @@ const MESSAGES: Record<DriveDownloadErrorCode, string> = {
   IMAGE_TOO_LARGE: "Images must be 20 MB or smaller.",
   INVALID_IMAGE: "This file isn't a valid image of the type it claims to be.",
   PERMISSION_DENIED: "The connected Google account can't read this file.",
+  CATEGORY_ROOT_NOT_CONNECTED: "That folder isn't one of this store's connected category folders.",
+  SHOPIFY_NOT_CONNECTED: "Shopify isn't connected (or needs to be reconnected) for this store.",
   GOOGLE_DRIVE_THROTTLED: "Google Drive is busy right now. We'll try again shortly.",
   GOOGLE_DRIVE_UNAVAILABLE: "Google Drive is temporarily unavailable. We'll try again shortly.",
   NETWORK_ERROR: "We couldn't reach Google Drive. We'll try again shortly.",
@@ -133,8 +137,11 @@ export type StoreDriveContext = {
   workspaceId: string;
   connectionStatus: string | null;
   googleAccountId: string | null;
+  /** Single-root columns from Prompt 7 (always one of the category roots while any exists). */
   rootFolderId: string | null;
   rootFolderName: string | null;
+  /** Connected CATEGORY roots of the current Google account (Prompt 12). */
+  categoryRoots: { id: string; name: string }[];
   allowedImageTypes: string[];
   ignoredFolders: string[];
 };
@@ -151,15 +158,25 @@ export function createDriveDownloadRepository(): DriveDownloadRepository {
       const { data: store, error } = await db.from("stores").select("id, workspace_id").eq("id", storeId).maybeSingle();
       if (error) throw new Error("Could not load store");
       if (!store) return null;
-      const [{ data: conn, error: connError }, { data: settings, error: settingsError }] = await Promise.all([
-        db
-          .from("google_drive_connections")
-          .select("connection_status, google_account_id, root_folder_id, root_folder_name")
-          .eq("store_id", storeId)
-          .maybeSingle(),
-        db.from("store_settings").select("allowed_image_types, ignored_folders").eq("store_id", storeId).maybeSingle(),
-      ]);
-      if (connError || settingsError) throw new Error("Could not load Google Drive settings");
+      const [{ data: conn, error: connError }, { data: settings, error: settingsError }, { data: roots, error: rootsError }] =
+        await Promise.all([
+          db
+            .from("google_drive_connections")
+            .select("connection_status, google_account_id, root_folder_id, root_folder_name")
+            .eq("store_id", storeId)
+            .maybeSingle(),
+          db.from("store_settings").select("allowed_image_types, ignored_folders").eq("store_id", storeId).maybeSingle(),
+          db
+            .from("google_drive_category_roots")
+            .select("folder_id, folder_name, google_account_id")
+            .eq("store_id", storeId)
+            .order("created_at", { ascending: true }),
+        ]);
+      if (connError || settingsError || rootsError) throw new Error("Could not load Google Drive settings");
+      // Only roots selected with the CURRENTLY connected Google account count.
+      const categoryRoots = (roots ?? [])
+        .filter((r) => conn?.google_account_id && r.google_account_id === conn.google_account_id)
+        .map((r) => ({ id: r.folder_id, name: r.folder_name }));
       return {
         storeId: store.id,
         workspaceId: store.workspace_id,
@@ -167,6 +184,7 @@ export function createDriveDownloadRepository(): DriveDownloadRepository {
         googleAccountId: conn?.google_account_id ?? null,
         rootFolderId: conn?.root_folder_id ?? null,
         rootFolderName: conn?.root_folder_name ?? null,
+        categoryRoots,
         allowedImageTypes: settings?.allowed_image_types?.length ? settings.allowed_image_types : [...DEFAULT_IMAGE_EXTENSIONS],
         ignoredFolders: settings?.ignored_folders?.length ? settings.ignored_folders : [...DEFAULT_IGNORED_FOLDERS],
       };
@@ -226,14 +244,23 @@ export type DriveImageDownload = {
 type Ctx = { workspaceId: string; storeId: string; fileId: string };
 
 /** Store → workspace → connection → root checks. Returns the store's settings. */
-async function loadContext(ctx: Ctx, deps: DriveDownloadDeps): Promise<StoreDriveContext & { rootFolderId: string }> {
+export async function loadStoreDriveContext(
+  ctx: { workspaceId: string; storeId: string },
+  deps: Pick<DriveDownloadDeps, "downloads">,
+): Promise<StoreDriveContext & { roots: { id: string; name: string }[] }> {
   if (!UUID_RE.test(ctx.workspaceId) || !UUID_RE.test(ctx.storeId)) throw new DriveDownloadError("STORE_NOT_FOUND");
   const store = await deps.downloads.getStoreDriveContext(ctx.storeId);
   // Same answer for "doesn't exist" and "other workspace".
   if (!store || store.workspaceId !== ctx.workspaceId) throw new DriveDownloadError("STORE_NOT_FOUND");
   if (store.connectionStatus !== "connected") throw new DriveDownloadError("GOOGLE_DRIVE_NOT_CONNECTED");
-  if (!store.rootFolderId) throw new DriveDownloadError("GOOGLE_DRIVE_ROOT_NOT_SELECTED");
-  return { ...store, rootFolderId: store.rootFolderId };
+  // Category roots (Prompt 12); stores that only have the Prompt 7 single root keep working.
+  const roots = store.categoryRoots?.length
+    ? store.categoryRoots
+    : store.rootFolderId
+      ? [{ id: store.rootFolderId, name: store.rootFolderName ?? store.rootFolderId }]
+      : [];
+  if (!roots.length) throw new DriveDownloadError("GOOGLE_DRIVE_ROOT_NOT_SELECTED");
+  return { ...store, roots };
 }
 
 async function getMeta<T>(drive: DriveClient, id: string, fields: string): Promise<T> {
@@ -248,10 +275,10 @@ async function getMeta<T>(drive: DriveClient, id: string, fields: string): Promi
 async function assertInsideRoot(
   drive: DriveClient,
   parents: string[],
-  rootId: string,
+  rootIds: ReadonlySet<string>,
   ignoredFolders: readonly string[],
   maxDepth: number,
-): Promise<string> {
+): Promise<{ parentFolderId: string; rootId: string }> {
   const direct = parents[0];
   if (!direct) throw new DriveDownloadError("DRIVE_FILE_OUTSIDE_ROOT");
   let frontier = parents.map((id) => ({ id, ignored: false }));
@@ -260,8 +287,8 @@ async function assertInsideRoot(
   for (let depth = 0; depth < maxDepth && frontier.length; depth++) {
     const next: { id: string; ignored: boolean }[] = [];
     for (const node of frontier) {
-      if (node.id === rootId) {
-        if (!node.ignored) return direct;
+      if (rootIds.has(node.id)) {
+        if (!node.ignored) return { parentFolderId: direct, rootId: node.id };
         reachedViaIgnored = true;
         continue;
       }
@@ -282,6 +309,21 @@ async function assertInsideRoot(
     frontier = next;
   }
   throw new DriveDownloadError(reachedViaIgnored ? "DRIVE_FILE_IN_IGNORED_FOLDER" : "DRIVE_FILE_OUTSIDE_ROOT");
+}
+
+/** A connected category root must exist, be readable, be a folder and not be trashed. */
+export async function assertRootAccessible(drive: DriveClient, rootId: string): Promise<{ id: string; name: string }> {
+  let root: DriveFileMeta;
+  try {
+    root = await getMeta<DriveFileMeta>(drive, rootId, ANCESTOR_FIELDS);
+  } catch (error) {
+    if (error instanceof DriveApiError && (error.kind === "not_found" || error.kind === "forbidden")) {
+      throw new DriveDownloadError("DRIVE_ROOT_INACCESSIBLE");
+    }
+    throw error;
+  }
+  if (root.trashed || root.mimeType !== FOLDER_MIME) throw new DriveDownloadError("DRIVE_ROOT_INACCESSIBLE");
+  return { id: root.id, name: root.name };
 }
 
 const GOOGLE_DOWNLOAD_HOSTS = [/^www\.googleapis\.com$/, /(^|\.)googleusercontent\.com$/];
@@ -397,7 +439,7 @@ async function readCapped(res: Response): Promise<Buffer> {
 export async function downloadDriveImage(ctx: Ctx, deps: DriveDownloadDeps): Promise<DriveImageDownload> {
   try {
     if (!DRIVE_ID_RE.test(ctx.fileId)) throw new DriveDownloadError("DRIVE_FILE_NOT_FOUND");
-    const store = await loadContext(ctx, deps);
+    const store = await loadStoreDriveContext(ctx, deps);
 
     // Token only from the stored connection; must still be the account that selected the root.
     const { accessToken, credentials } = await refreshGoogleToken(ctx.storeId, deps);
@@ -407,18 +449,6 @@ export async function downloadDriveImage(ctx: Ctx, deps: DriveDownloadDeps): Pro
       throw new DriveDownloadError("GOOGLE_DRIVE_ROOT_NOT_SELECTED");
     }
     const drive = await getDriveClient(ctx.storeId, deps);
-
-    // Root folder: exists, readable, a folder, not trashed.
-    let root: DriveFileMeta;
-    try {
-      root = await getMeta<DriveFileMeta>(drive, store.rootFolderId, ANCESTOR_FIELDS);
-    } catch (error) {
-      if (error instanceof DriveApiError && (error.kind === "not_found" || error.kind === "forbidden")) {
-        throw new DriveDownloadError("DRIVE_ROOT_INACCESSIBLE");
-      }
-      throw error;
-    }
-    if (root.trashed || root.mimeType !== FOLDER_MIME) throw new DriveDownloadError("DRIVE_ROOT_INACCESSIBLE");
 
     // File metadata.
     const meta = await getMeta<DriveFileMeta>(drive, ctx.fileId, FILE_FIELDS);
@@ -438,8 +468,16 @@ export async function downloadDriveImage(ctx: Ctx, deps: DriveDownloadDeps): Pro
     const metaSize = meta.size !== undefined ? Number(meta.size) : null;
     if (metaSize !== null && Number.isFinite(metaSize) && metaSize > MAX_IMAGE_BYTES) throw new DriveDownloadError("IMAGE_TOO_LARGE");
 
-    // Location: must be inside the store's root (and not under an ignored folder).
-    const parentFolderId = await assertInsideRoot(drive, meta.parents ?? [], store.rootFolderId, store.ignoredFolders, deps.maxDepth ?? 25);
+    // Location: must be inside one of the store's category roots (and not under an ignored folder).
+    const { parentFolderId, rootId } = await assertInsideRoot(
+      drive,
+      meta.parents ?? [],
+      new Set(store.roots.map((r) => r.id)),
+      store.ignoredFolders,
+      deps.maxDepth ?? 25,
+    );
+    // That root folder itself must still exist, be a folder and not be trashed.
+    await assertRootAccessible(drive, rootId);
 
     // Binary.
     const token = { value: accessToken };

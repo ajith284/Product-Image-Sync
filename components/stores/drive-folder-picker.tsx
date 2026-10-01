@@ -19,7 +19,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState, useTransition } from "react";
 import { toast } from "sonner";
 
-import { selectGoogleRootFolder } from "@/app/(app)/stores/[id]/google-actions";
+import { addGoogleCategoryRoot, selectGoogleRootFolder } from "@/app/(app)/stores/[id]/google-actions";
 import { formatDate } from "@/components/stores/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
@@ -70,11 +70,16 @@ export function DriveFolderPicker({
   open,
   onOpenChange,
   currentRootName,
+  mode = "root",
+  connectedRootIds = [],
 }: {
   storeId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   currentRootName: string | null;
+  /** "category" (Prompt 12) adds a category folder; "root" keeps the Prompt 7 single-root behaviour. */
+  mode?: "root" | "category";
+  connectedRootIds?: string[];
 }) {
   const router = useRouter();
   const [path, setPath] = useState<Crumb[]>([MY_DRIVE]);
@@ -172,18 +177,22 @@ export function DriveFolderPicker({
   };
 
   const isRealFolder = listing?.folder.kind === "folder" && listing.folder.id === current.id;
-  const canSelect = Boolean(isRealFolder && !listing?.folder.ignored && !loading);
+  const alreadyConnected = Boolean(mode === "category" && listing && connectedRootIds.includes(listing.folder.id));
+  const canSelect = Boolean(isRealFolder && !listing?.folder.ignored && !loading && !alreadyConnected);
 
   const select = () => {
     if (!canSelect || !listing) return;
     setSaveError(null);
     startSaving(async () => {
-      const r = await selectGoogleRootFolder(storeId, listing.folder.id);
+      const r =
+        mode === "category"
+          ? await addGoogleCategoryRoot(storeId, listing.folder.id)
+          : await selectGoogleRootFolder(storeId, listing.folder.id);
       if (r?.error) {
         setSaveError(r.error);
         return;
       }
-      toast.success(r?.message ?? "Root folder saved.");
+      toast.success(r?.message ?? (mode === "category" ? "Category folder connected." : "Root folder saved."));
       onOpenChange(false);
       router.refresh();
     });
@@ -478,6 +487,14 @@ export function DriveFolderPicker({
             {listing?.folder.ignored ? (
               <span className="block text-xs text-muted-foreground">Ignored folders can&apos;t be the root.</span>
             ) : null}
+            {alreadyConnected ? (
+              <span className="block text-xs text-muted-foreground">This category folder is already connected.</span>
+            ) : null}
+            {mode === "category" ? (
+              <span className="block text-xs text-muted-foreground">
+                Choose a category folder (e.g. &quot;Sofa image&quot;), not a code folder like SOF-001.
+              </span>
+            ) : null}
           </div>
           <div className="flex justify-end gap-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={saving}>
@@ -485,7 +502,7 @@ export function DriveFolderPicker({
             </Button>
             <Button type="button" onClick={select} disabled={!canSelect || saving}>
               {saving ? <Loader2Icon className="animate-spin" /> : <FolderIcon />}
-              Select this folder
+              {mode === "category" ? "Connect this category folder" : "Select this folder"}
             </Button>
           </div>
         </SheetFooter>

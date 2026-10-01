@@ -73,6 +73,21 @@ export interface GoogleRepository {
     folderId: string;
     folderName: string;
   }): Promise<boolean>;
+  /**
+   * Add a CATEGORY root (e.g. "Sofa image") to the store — idempotent. The DB re-checks
+   * workspace → owner/admin → store → connected with the same Google account.
+   * Returns false when the connection changed meanwhile (not connected / other account).
+   */
+  addCategoryRoot(input: {
+    storeId: string;
+    workspaceId: string;
+    userId: string;
+    googleAccountId: string;
+    folderId: string;
+    folderName: string;
+  }): Promise<boolean>;
+  /** Remove a category root (configuration only — no Drive or history changes). */
+  removeCategoryRoot(input: { storeId: string; workspaceId: string; userId: string; folderId: string }): Promise<boolean>;
 }
 
 function mapError(error: { message?: string } | null, fallback: GoogleFlowErrorCode): never {
@@ -186,6 +201,31 @@ export function createGoogleRepository(): GoogleRepository {
         metadata: { folder_id: folderId, actor: userId },
       });
       return true;
+    },
+
+    async addCategoryRoot({ storeId, workspaceId, userId, googleAccountId, folderId, folderName }) {
+      const { error } = await db.rpc("google_add_category_root", {
+        p_store_id: storeId,
+        p_workspace_id: workspaceId,
+        p_user_id: userId,
+        p_google_account_id: googleAccountId,
+        p_folder_id: folderId,
+        p_folder_name: folderName.slice(0, 500),
+      });
+      if (error?.message?.trim() === "google_not_connected") return false;
+      if (error) mapError(error, "unknown");
+      return true;
+    },
+
+    async removeCategoryRoot({ storeId, workspaceId, userId, folderId }) {
+      const { data, error } = await db.rpc("google_remove_category_root", {
+        p_store_id: storeId,
+        p_workspace_id: workspaceId,
+        p_user_id: userId,
+        p_folder_id: folderId,
+      });
+      if (error) mapError(error, "unknown");
+      return data === true;
     },
 
     async disconnect(storeId, userId) {

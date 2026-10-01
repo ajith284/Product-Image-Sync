@@ -62,6 +62,42 @@ export type Database = {
           },
         ]
       }
+      google_drive_category_roots: {
+        Row: {
+          added_by: string | null
+          connection_id: string
+          created_at: string
+          folder_id: string
+          folder_name: string
+          google_account_id: string
+          id: string
+          store_id: string
+          updated_at: string
+        }
+        Insert: {
+          added_by?: string | null
+          connection_id: string
+          created_at?: string
+          folder_id: string
+          folder_name: string
+          google_account_id: string
+          id?: string
+          store_id: string
+          updated_at?: string
+        }
+        Update: {
+          added_by?: string | null
+          connection_id?: string
+          created_at?: string
+          folder_id?: string
+          folder_name?: string
+          google_account_id?: string
+          id?: string
+          store_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       google_drive_connections: {
         Row: {
           connected_at: string | null
@@ -774,6 +810,17 @@ export type Database = {
         }
       }
       // Service-role-only RPCs (migration 20260930110157_shopify_oauth). Nullable args hand-annotated.
+      google_add_category_root: {
+        Args: {
+          p_folder_id: string
+          p_folder_name: string
+          p_google_account_id: string
+          p_store_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
       google_begin_oauth: {
         Args: {
           p_state_hash: string
@@ -820,6 +867,10 @@ export type Database = {
           p_store_id: string
         }
         Returns: undefined
+      }
+      google_remove_category_root: {
+        Args: { p_folder_id: string; p_store_id: string; p_user_id: string; p_workspace_id: string }
+        Returns: boolean
       }
       google_save_connection: {
         Args: {
