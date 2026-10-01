@@ -530,48 +530,103 @@ export type Database = {
       }
       sync_jobs: {
         Row: {
+          cancel_requested_at: string | null
+          cancelled_at: string | null
           completed_at: string | null
           created_at: string
+          dry_run: boolean
+          error_code: string | null
+          error_message: string | null
           errors_count: number
           id: string
+          idempotency_key: string | null
           images_uploaded: number
+          items_failed: number
+          items_review: number
+          items_skipped: number
+          items_total: number
+          options: Json
           products_processed: number
           products_synced: number
+          request_hash: string | null
+          request_id: string | null
+          requested_by_api_key: string | null
+          requested_by_user: string | null
           started_at: string | null
           status: string
           store_id: string
           trigger_type: string
           warnings_count: number
+          workspace_id: string
         }
         Insert: {
+          cancel_requested_at?: string | null
+          cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string
+          dry_run?: boolean
+          error_code?: string | null
+          error_message?: string | null
           errors_count?: number
           id?: string
+          idempotency_key?: string | null
           images_uploaded?: number
+          items_failed?: number
+          items_review?: number
+          items_skipped?: number
+          items_total?: number
+          options?: Json
           products_processed?: number
           products_synced?: number
+          request_hash?: string | null
+          request_id?: string | null
+          requested_by_api_key?: string | null
+          requested_by_user?: string | null
           started_at?: string | null
           status?: string
           store_id: string
           trigger_type?: string
           warnings_count?: number
+          workspace_id?: string
         }
         Update: {
+          cancel_requested_at?: string | null
+          cancelled_at?: string | null
           completed_at?: string | null
           created_at?: string
+          dry_run?: boolean
+          error_code?: string | null
+          error_message?: string | null
           errors_count?: number
           id?: string
+          idempotency_key?: string | null
           images_uploaded?: number
+          items_failed?: number
+          items_review?: number
+          items_skipped?: number
+          items_total?: number
+          options?: Json
           products_processed?: number
           products_synced?: number
+          request_hash?: string | null
+          request_id?: string | null
+          requested_by_api_key?: string | null
+          requested_by_user?: string | null
           started_at?: string | null
           status?: string
           store_id?: string
           trigger_type?: string
           warnings_count?: number
+          workspace_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "sync_jobs_store_workspace_fkey"
+            columns: ["store_id", "workspace_id"]
+            isOneToOne: false
+            referencedRelation: "stores"
+            referencedColumns: ["id", "workspace_id"]
+          },
           {
             foreignKeyName: "sync_jobs_store_id_fkey"
             columns: ["store_id"]
@@ -645,6 +700,38 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      api_key_create: {
+        Args: {
+          p_expires_at: string
+          p_key_prefix: string
+          p_name: string
+          p_scopes: string[]
+          p_secret_hash: string
+          p_store_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      api_key_revoke: {
+        Args: { p_key_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      api_keys_list: {
+        Args: { p_user_id: string; p_workspace_id: string }
+        Returns: {
+          created_at: string
+          expires_at: string
+          id: string
+          key_prefix: string
+          last_used_at: string
+          name: string
+          revoked_at: string
+          scopes: string[]
+          store_id: string
+          store_name: string
+        }[]
+      }
       create_workspace: {
         Args: { p_name: string; p_slug?: string }
         Returns: {
@@ -732,6 +819,65 @@ export type Database = {
           p_encrypted_refresh_token: string
           p_expected_version: number
         }
+        Returns: boolean
+      }
+      n8n_authenticate: {
+        Args: { p_key_prefix: string }
+        Returns: {
+          id: string
+          name: string
+          scopes: string[]
+          secret_hash: string
+          store_id: string
+          workspace_id: string
+        }[]
+      }
+      n8n_cancel_sync_job: {
+        Args: { p_job_id: string; p_key_id: string; p_request_id: string }
+        Returns: { changed: boolean; job: Json }[]
+      }
+      n8n_create_sync_job: {
+        Args: {
+          p_dry_run: boolean
+          p_idempotency_key: string
+          p_key_id: string
+          p_options: Json
+          p_request_hash: string
+          p_request_id: string
+          p_store_id: string
+          p_trigger: string
+        }
+        Returns: { job: Json; replayed: boolean }[]
+      }
+      n8n_get_sync_job: {
+        Args: { p_job_id: string; p_key_id: string }
+        Returns: Json
+      }
+      n8n_list_sync_jobs: {
+        Args: {
+          p_cursor_created_at?: string
+          p_cursor_id?: string
+          p_key_id: string
+          p_limit?: number
+          p_status?: string
+          p_store_id?: string
+        }
+        Returns: Json[]
+      }
+      n8n_rate_limit_hit: {
+        Args: { p_bucket: string; p_limit: number; p_window_seconds: number }
+        Returns: { allowed: boolean; current_count: number; retry_after: number }[]
+      }
+      n8n_store_status: {
+        Args: { p_key_id: string; p_store_id: string }
+        Returns: Json
+      }
+      n8n_touch_api_key: {
+        Args: { p_key_id: string }
+        Returns: undefined
+      }
+      n8n_use_nonce: {
+        Args: { p_key_id: string; p_nonce: string; p_ttl_seconds?: number }
         Returns: boolean
       }
       shopify_begin_oauth: {

@@ -1,3 +1,6 @@
+import { ChevronRightIcon, KeyRoundIcon } from "lucide-react";
+import Link from "next/link";
+
 import { updateProfile, updateWorkspaceName } from "@/app/(app)/settings/actions";
 import { NameForm } from "@/components/settings/name-form";
 import { PageHeader } from "@/components/shared/page-header";
@@ -72,6 +75,28 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {canEditWorkspace ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>Automation</CardTitle>
+            <CardDescription>Credentials for n8n and other automations.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Link
+              href="/settings/api-keys"
+              className="flex items-center gap-3 rounded-lg border p-3 text-sm hover:bg-accent"
+            >
+              <KeyRoundIcon className="size-4 text-muted-foreground" />
+              <span className="flex-1">
+                <span className="font-medium">API keys</span>
+                <span className="block text-muted-foreground">Create, view and revoke Product Image Sync API keys.</span>
+              </span>
+              <ChevronRightIcon className="size-4 text-muted-foreground" />
+            </Link>
+          </CardContent>
+        </Card>
+      ) : null}
     </>
   );
 }

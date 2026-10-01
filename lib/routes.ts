@@ -8,6 +8,8 @@ const PUBLIC_PREFIXES = [
   "/auth",
   // Shopify webhooks carry no user session; they are authenticated by HMAC.
   "/api/shopify/webhooks",
+  // Machine API for n8n: authenticated ONLY by API key (never by a browser session).
+  "/api/n8n",
 ];
 
 /** Pages a signed-in user should be sent away from. */

@@ -20,10 +20,17 @@ export type ImageType = (typeof IMAGE_TYPES)[number];
 export const MAPPING_TYPES = ["automatic", "manual"] as const;
 export type MappingType = (typeof MAPPING_TYPES)[number];
 
-export const SYNC_JOB_STATUSES = ["pending", "running", "completed", "partially_completed", "failed"] as const;
+export const SYNC_JOB_STATUSES = [
+  "queued",
+  "running",
+  "completed",
+  "completed_with_errors",
+  "failed",
+  "cancelled",
+] as const;
 export type SyncJobStatus = (typeof SYNC_JOB_STATUSES)[number];
 
-export const SYNC_TRIGGER_TYPES = ["manual", "scheduled"] as const;
+export const SYNC_TRIGGER_TYPES = ["manual", "scheduled", "n8n", "api"] as const;
 export type SyncTriggerType = (typeof SYNC_TRIGGER_TYPES)[number];
 
 export const SYNC_ITEM_STATUSES = [
