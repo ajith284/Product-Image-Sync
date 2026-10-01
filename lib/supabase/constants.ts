@@ -44,7 +44,7 @@ export const SYNC_ITEM_STATUSES = [
 ] as const;
 export type SyncItemStatus = (typeof SYNC_ITEM_STATUSES)[number];
 
-export const IMAGE_UPLOAD_STATUSES = ["pending", "uploaded", "failed", "skipped"] as const;
+export const IMAGE_UPLOAD_STATUSES = ["pending", "processing", "uploaded", "failed", "skipped"] as const;
 export type ImageUploadStatus = (typeof IMAGE_UPLOAD_STATUSES)[number];
 
 export const INTEGRATION_PROVIDERS = ["shopify", "google_drive"] as const;

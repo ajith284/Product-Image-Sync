@@ -408,6 +408,14 @@ export type Database = {
       }
       sync_images: {
         Row: {
+          attempt_count: number
+          drive_folder_id: string | null
+          error_code: string | null
+          error_message: string | null
+          file_size: number | null
+          last_attempt_at: string | null
+          mime_type: string | null
+          retryable: boolean | null
           checksum: string | null
           created_at: string
           drive_file_id: string
@@ -423,6 +431,14 @@ export type Database = {
           uploaded_at: string | null
         }
         Insert: {
+          attempt_count?: number
+          drive_folder_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          file_size?: number | null
+          last_attempt_at?: string | null
+          mime_type?: string | null
+          retryable?: boolean | null
           checksum?: string | null
           created_at?: string
           drive_file_id: string
@@ -438,6 +454,14 @@ export type Database = {
           uploaded_at?: string | null
         }
         Update: {
+          attempt_count?: number
+          drive_folder_id?: string | null
+          error_code?: string | null
+          error_message?: string | null
+          file_size?: number | null
+          last_attempt_at?: string | null
+          mime_type?: string | null
+          retryable?: boolean | null
           checksum?: string | null
           created_at?: string
           drive_file_id?: string
@@ -955,6 +979,47 @@ export type Database = {
           p_refresh_expires_at: string | null
         }
         Returns: boolean
+      }
+      sync_image_claim: {
+        Args: {
+          p_checksum?: string
+          p_drive_file_id: string
+          p_drive_folder_id?: string
+          p_drive_modified_at?: string
+          p_file_size?: number
+          p_filename: string
+          p_lease_seconds?: number
+          p_max_attempts?: number
+          p_mime_type?: string
+          p_shopify_product_id: string
+          p_store_id: string
+          p_sync_item_id?: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      sync_image_mark_failed: {
+        Args: {
+          p_error_code: string
+          p_error_message: string
+          p_image_id: string
+          p_retryable: boolean
+          p_store_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      sync_image_mark_processing: {
+        Args: { p_image_id: string; p_shopify_media_id: string; p_store_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      sync_image_mark_uploaded: {
+        Args: { p_image_id: string; p_shopify_media_id: string; p_store_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      sync_image_record_attempt: {
+        Args: { p_image_id: string; p_store_id: string; p_workspace_id: string }
+        Returns: Json
       }
     }
     Enums: {

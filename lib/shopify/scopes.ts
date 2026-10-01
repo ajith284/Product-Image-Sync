@@ -1,8 +1,9 @@
 /**
  * Access scopes. Minimum set for adding images to EXISTING products:
- *   read_products  – find products by title
- *   write_products – attach media to products (productCreateMedia / productUpdate media)
- *   write_files    – create files from staged uploads
+ *   read_products  – find products by title, check a product before uploading
+ *   write_products – product media permissions
+ *   write_files    – stagedUploadsCreate, fileCreate, fileUpdate (referencesToAdd → product)
+ * See lib/shopify/media.ts (productCreateMedia is deprecated and not used).
  *
  * Deliberately NOT requested: orders, customers, payments, themes, inventory, …
  * Adding a scope here forces every merchant to re-approve the app.
