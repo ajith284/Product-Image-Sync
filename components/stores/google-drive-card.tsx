@@ -18,6 +18,7 @@ import {
   verifyGoogleDrive,
   type GoogleActionState,
 } from "@/app/(app)/stores/[id]/google-actions";
+import { DriveFolderPicker } from "@/components/stores/drive-folder-picker";
 import { formatDate } from "@/components/stores/types";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import {
@@ -67,6 +68,7 @@ export function GoogleDriveCard({
   const [pending, startTransition] = useTransition();
   const [busy, setBusy] = useState<"connect" | "verify" | "disconnect" | null>(null);
   const [result, setResult] = useState<GoogleActionState>(undefined);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
   const run = (kind: "connect" | "verify" | "disconnect", action: (id: string) => Promise<GoogleActionState>) => {
     setBusy(kind);
@@ -120,12 +122,28 @@ export function GoogleDriveCard({
                 {connection.last_verified_at ? formatDate(connection.last_verified_at) : "Not yet"}
               </Row>
             </dl>
-            <div className="flex items-center gap-2 rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
-              <FolderIcon className="size-4 shrink-0" />
-              {connection.root_folder_name
-                ? `Root folder: ${connection.root_folder_name}`
-                : "Folder selection comes in the next step."}
+            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-3">
+              <div className="flex min-w-0 items-center gap-2">
+                <FolderIcon className={connection.root_folder_name ? "size-4 shrink-0 text-sky-600" : "size-4 shrink-0 text-muted-foreground"} />
+                <div className="grid min-w-0 gap-0.5">
+                  <span className="text-xs text-muted-foreground">Root folder</span>
+                  <span className="text-sm font-medium break-all">{connection.root_folder_name ?? "Not selected"}</span>
+                </div>
+              </div>
+              {canManage && connected ? (
+                <Button size="sm" variant={connection.root_folder_name ? "outline" : "default"} onClick={() => setPickerOpen(true)}>
+                  {connection.root_folder_name ? "Change folder" : "Select folder"}
+                </Button>
+              ) : null}
             </div>
+            {canManage && connected && pickerOpen ? (
+              <DriveFolderPicker
+                storeId={storeId}
+                open={pickerOpen}
+                onOpenChange={setPickerOpen}
+                currentRootName={connection.root_folder_name}
+              />
+            ) : null}
           </>
         ) : (
           <div className="grid gap-1 rounded-lg border border-dashed p-4">

@@ -60,6 +60,19 @@ export interface GoogleRepository {
     log?: boolean;
   }): Promise<void>;
   disconnect(storeId: string, userId: string): Promise<boolean>;
+  /**
+   * Replace the store's root folder on its EXISTING connection row (never
+   * inserts). Only applies while the connection is connected AND still uses
+   * the Google account that validated the folder. Returns false when no row matched.
+   */
+  setRootFolder(input: {
+    storeId: string;
+    workspaceId: string;
+    userId: string;
+    googleAccountId: string;
+    folderId: string;
+    folderName: string;
+  }): Promise<boolean>;
 }
 
 function mapError(error: { message?: string } | null, fallback: GoogleFlowErrorCode): never {
@@ -153,6 +166,26 @@ export function createGoogleRepository(): GoogleRepository {
         p_log: log ?? false,
       });
       if (error) mapError(error, "unknown");
+    },
+
+    async setRootFolder({ storeId, workspaceId, userId, googleAccountId, folderId, folderName }) {
+      const { data, error } = await db
+        .from("google_drive_connections")
+        .update({ root_folder_id: folderId, root_folder_name: folderName.slice(0, 500) })
+        .eq("store_id", storeId)
+        .eq("google_account_id", googleAccountId)
+        .eq("connection_status", "connected")
+        .select("id");
+      if (error) mapError(error, "unknown");
+      if (!data?.length) return false;
+      await db.from("activity_logs").insert({
+        workspace_id: workspaceId,
+        store_id: storeId,
+        event_type: "google_drive_root_folder_selected",
+        message: `Selected Google Drive root folder "${folderName.slice(0, 200)}".`,
+        metadata: { folder_id: folderId, actor: userId },
+      });
+      return true;
     },
 
     async disconnect(storeId, userId) {

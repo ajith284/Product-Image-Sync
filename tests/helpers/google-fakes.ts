@@ -81,6 +81,9 @@ export function fakeGoogleRepo(overrides: Partial<GoogleRepository> = {}) {
     creds: StoredGoogleCredentials | null;
     verifications: Parameters<GoogleRepository["recordVerification"]>[0][];
     disconnected: number;
+    /** The ONE connection row's root folder (updates replace it; nothing is ever inserted). */
+    root: { id: string; name: string } | null;
+    rootUpdates: number;
   } = {
     consumed: { status: "ok", userId: G_USER_ID, workspaceId: G_WORKSPACE_ID, storeId: G_STORE_ID },
     begun: [],
@@ -88,6 +91,8 @@ export function fakeGoogleRepo(overrides: Partial<GoogleRepository> = {}) {
     creds: null,
     verifications: [],
     disconnected: 0,
+    root: null,
+    rootUpdates: 0,
   };
 
   const repo: GoogleRepository = {
@@ -129,6 +134,15 @@ export function fakeGoogleRepo(overrides: Partial<GoogleRepository> = {}) {
     disconnect: vi.fn(async () => {
       state.disconnected += 1;
       state.creds = null;
+      return true;
+    }),
+    setRootFolder: vi.fn(async (input) => {
+      // Mirrors: UPDATE … WHERE store_id AND google_account_id AND connection_status = 'connected'
+      if (!state.creds || state.creds.connectionStatus !== "connected" || state.creds.googleAccountId !== input.googleAccountId) {
+        return false;
+      }
+      state.root = { id: input.folderId, name: input.folderName };
+      state.rootUpdates += 1;
       return true;
     }),
     ...overrides,

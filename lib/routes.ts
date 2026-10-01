@@ -22,7 +22,7 @@ function matches(pathname: string, prefixes: string[]) {
  * the login page. (The Shopify OAuth callback is a browser redirect target and
  * keeps the normal login redirect.)
  */
-const JSON_API_PREFIXES = ["/api/shopify/products"];
+const JSON_API_PREFIXES = ["/api/shopify/products", "/api/google/folders"];
 
 export const isJsonApiPath = (pathname: string) => matches(pathname, JSON_API_PREFIXES);
 
