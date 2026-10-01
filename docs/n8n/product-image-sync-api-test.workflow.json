@@ -1,103 +1,1476 @@
 {
-  "name": "Product Image Sync API Test",
+  "name": "Product Image Sync — API Test",
   "nodes": [
     {
       "parameters": {},
-      "id": "6f1d1a10-0001-4a00-9000-000000000001",
-      "name": "Run test",
+      "id": "ed268dc5-ddd6-5d1d-8a08-e5ce19c3003e",
+      "name": "Manual Trigger",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [0, 0]
+      "position": [
+        0,
+        0
+      ]
     },
     {
       "parameters": {
         "assignments": {
           "assignments": [
-            { "id": "a1", "name": "baseUrl", "value": "https://YOUR-APP-DOMAIN/api/n8n/v1", "type": "string" },
-            { "id": "a2", "name": "storeId", "value": "YOUR-STORE-ID", "type": "string" }
+            {
+              "id": "908371f0-fdda-58fa-be29-8d9fe21293c5",
+              "name": "baseUrl",
+              "value": "https://reach-rental-heat.ngrok-free.dev/api/n8n/v1",
+              "type": "string"
+            },
+            {
+              "id": "a05b6c13-5e3a-5ff8-8767-209101983a29",
+              "name": "storeId",
+              "value": "7bb362f0-ce91-4b0b-a81b-373d49f2b242",
+              "type": "string"
+            }
           ]
         },
         "options": {}
       },
-      "id": "6f1d1a10-0001-4a00-9000-000000000002",
+      "id": "1047a03d-cb24-5743-95f5-572c65270151",
       "name": "Config",
       "type": "n8n-nodes-base.set",
       "typeVersion": 3.4,
-      "position": [220, 0]
+      "position": [
+        220,
+        0
+      ]
     },
     {
       "parameters": {
-        "url": "={{ $('Config').item.json.baseUrl }}/health",
-        "options": {}
-      },
-      "id": "6f1d1a10-0001-4a00-9000-000000000003",
-      "name": "1 Health",
-      "type": "n8n-nodes-base.httpRequest",
-      "typeVersion": 4.2,
-      "position": [440, 0]
-    },
-    {
-      "parameters": {
-        "url": "={{ $('Config').item.json.baseUrl }}/stores/{{ $('Config').item.json.storeId }}/status",
-        "authentication": "genericCredentialType",
-        "genericAuthType": "httpHeaderAuth",
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/health",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "X-Request-ID", "value": "=n8n-{{ $execution.id }}-status" }] },
-        "options": {}
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
       },
-      "id": "6f1d1a10-0001-4a00-9000-000000000004",
-      "name": "2 Store status",
+      "id": "ff19c4d1-2c7e-59d5-b6f1-0a36aa44634e",
+      "name": "Health",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [660, 0]
+      "position": [
+        440,
+        0
+      ]
     },
     {
       "parameters": {
-        "method": "POST",
-        "url": "={{ $('Config').item.json.baseUrl }}/sync-jobs",
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "1a1a60c2-5304-5cbb-9a27-6c0ff4bab7d1",
+              "leftValue": "={{ [429, 502, 503, 504].includes(Number($json.statusCode)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "258ee20d-cf95-597b-8d11-9e2470eac6d4",
+      "name": "Health Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || 2, 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "5871468b-3b00-52c8-b881-d8b664934f9d",
+      "name": "Health Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        880,
+        -160
+      ],
+      "webhookId": "1b1b4ade-da00-55d5-85d9-00166c0037f9"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/health",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "5623fbdb-1a48-5550-8dc2-b00ae416601c",
+      "name": "Health (Retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1100,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Never logs or returns credentials: only the API response body is read.\nconst r = $input.first().json;\nconst status = Number(r.statusCode);\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body || {};\nconst headers = r.headers || {};\nif (!(status >= 200 && status < 300)) {\n  const e = body.error || {};\n  const extra = e.active_job_id ? ` (active job ${e.active_job_id})` : '';\n  throw new Error(`Health failed: HTTP ${status}` + (e.code ? ` ${e.code}: ${e.message}${extra} [request_id ${e.request_id}]` : ''));\n}\n\nif (body.ok !== true) throw new Error('Health failed: ok is not true');\nreturn [{ json: { health_ok: true, service: body.service, version: body.version } }];\n"
+      },
+      "id": "6ebc48c7-f49e-50c6-965d-ee6969afa7d8",
+      "name": "Check Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1320,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/stores/{{ $('Config').first().json.storeId }}/status",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Idempotency-Key", "value": "=n8n-{{ $execution.id }}-create" },
-            { "name": "X-Request-ID", "value": "=n8n-{{ $execution.id }}-create" }
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "cc3a733a-6142-58f7-917e-29f4c9e102a1",
+      "name": "Store Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1540,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "dda9a176-66a5-5fbf-ab40-662df6d17183",
+              "leftValue": "={{ [429, 502, 503, 504].includes(Number($json.statusCode)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "ac9e9ce5-ce49-569d-90a9-077cce0ebeca",
+      "name": "Store Status Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1760,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || 2, 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "5f7aef05-628e-5744-b6d6-934f06f388d7",
+      "name": "Store Status Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1980,
+        -160
+      ],
+      "webhookId": "c7212d14-8f05-5e1a-a3f6-47d24fd5995c"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/stores/{{ $('Config').first().json.storeId }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "f2208dc0-7591-5cfa-a598-65234d5fc7da",
+      "name": "Store Status (Retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2200,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Never logs or returns credentials: only the API response body is read.\nconst r = $input.first().json;\nconst status = Number(r.statusCode);\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body || {};\nconst headers = r.headers || {};\nif (!(status >= 200 && status < 300)) {\n  const e = body.error || {};\n  const extra = e.active_job_id ? ` (active job ${e.active_job_id})` : '';\n  throw new Error(`Store Status failed: HTTP ${status}` + (e.code ? ` ${e.code}: ${e.message}${extra} [request_id ${e.request_id}]` : ''));\n}\n\nconst shopify = body.shopify || {};\nconst drive = body.google_drive || {};\nreturn [{ json: {\n  store_id: body.store_id,\n  store_name: body.store_name,\n  shopify_connected: shopify.connected === true,\n  google_drive_connected: drive.connected === true,\n  root_folder_selected: drive.root_folder_selected === true,\n  root_folder_name: drive.root_folder_name || null,\n  ready_for_sync: body.ready_for_sync === true,\n} }];\n"
+      },
+      "id": "954215fe-26b0-5bcb-8102-1d205d388a3c",
+      "name": "Check Store Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2420,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "3ae3cf16-da4a-50ea-8f82-baf01447836e",
+              "leftValue": "={{ $json.ready_for_sync === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "af7214d1-179a-5395-9288-3d132ded6448",
+      "name": "Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2640,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Store is not ready for sync: shopify_connected=' + $json.shopify_connected + ', google_drive_connected=' + $json.google_drive_connected + ', root_folder_selected=' + $json.root_folder_selected }}"
+      },
+      "id": "3fc856bb-2bf5-53ca-87a8-7ffd9de3dccc",
+      "name": "Not Ready",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2860,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=n8n-{{ $execution.id }}-create"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-create"
+            }
           ]
         },
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ store_id: $('Config').item.json.storeId, trigger_source: 'n8n', dry_run: true }) }}",
-        "options": {}
+        "jsonBody": "={{ JSON.stringify({ store_id: $('Config').first().json.storeId, trigger_source: 'n8n', dry_run: true }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
       },
-      "id": "6f1d1a10-0001-4a00-9000-000000000005",
-      "name": "3 Create sync job (queue only)",
+      "id": "45170fd0-4598-541f-946f-9681fcb59657",
+      "name": "Create Dry-Run Job",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [880, 0]
+      "position": [
+        2860,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
     },
     {
       "parameters": {
-        "url": "={{ $('Config').item.json.baseUrl }}/sync-jobs/{{ $json.job_id }}",
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "38b5c782-fbd8-52f1-90a8-d433f1f6c3df",
+              "leftValue": "={{ [429, 502, 503, 504].includes(Number($json.statusCode)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f33ae545-9b3a-5db7-8924-4ad5e6cea5b1",
+      "name": "Create Dry-Run Job Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3080,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || 2, 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "cb9a7f94-5dcd-5b50-bddb-b58f2952eacb",
+      "name": "Create Dry-Run Job Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3300,
+        -160
+      ],
+      "webhookId": "c7d7e7db-f7de-554b-aabb-1e1af5a785e3"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs",
         "authentication": "genericCredentialType",
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
-        "headerParameters": { "parameters": [{ "name": "X-Request-ID", "value": "=n8n-{{ $execution.id }}-get" }] },
-        "options": {}
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=n8n-{{ $execution.id }}-create"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-create"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ store_id: $('Config').first().json.storeId, trigger_source: 'n8n', dry_run: true }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
       },
-      "id": "6f1d1a10-0001-4a00-9000-000000000006",
-      "name": "4 Get sync job",
+      "id": "0b6a67d0-b073-5f05-9a4c-6a0f740fc787",
+      "name": "Create Dry-Run Job (Retry)",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
-      "position": [1100, 0]
+      "position": [
+        3520,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Never logs or returns credentials: only the API response body is read.\nconst r = $input.first().json;\nconst status = Number(r.statusCode);\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body || {};\nconst headers = r.headers || {};\nif (!(status >= 200 && status < 300)) {\n  const e = body.error || {};\n  const extra = e.active_job_id ? ` (active job ${e.active_job_id})` : '';\n  throw new Error(`Create Dry-Run Job failed: HTTP ${status}` + (e.code ? ` ${e.code}: ${e.message}${extra} [request_id ${e.request_id}]` : ''));\n}\n\nif (body.dry_run !== true) throw new Error('Create Dry-Run Job failed: job is not a dry run');\nif (body.status !== 'queued') throw new Error(`Create Dry-Run Job failed: expected status queued, got ${body.status}`);\nreturn [{ json: {\n  job_id: body.job_id,\n  store_id: body.store_id,\n  status: body.status,\n  dry_run: body.dry_run,\n  replayed: String(headers['idempotent-replayed'] || '') === 'true',\n  http_status: status,\n} }];\n"
+      },
+      "id": "43d5f23e-9c3d-56a2-a70a-44fbb567659f",
+      "name": "Check Create Dry-Run Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3740,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Dry-Run Job').first().json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-get"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "a91df2b4-1aee-54a3-a8e5-618200a000d0",
+      "name": "Get Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3960,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "08e1d5e9-abd1-5212-a135-b8197455c6c2",
+              "leftValue": "={{ [429, 502, 503, 504].includes(Number($json.statusCode)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "e160cf24-568a-5189-9d3e-f9713f681dab",
+      "name": "Get Job Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || 2, 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "a578b9b2-7e10-5e89-b021-207bf0fd5fbe",
+      "name": "Get Job Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        4400,
+        -160
+      ],
+      "webhookId": "c867d097-84ce-5b87-890f-ed59d64fd7a9"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Dry-Run Job').first().json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-get"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "c260828a-15e5-5062-86cb-f36fc603f906",
+      "name": "Get Job (Retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4620,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Never logs or returns credentials: only the API response body is read.\nconst r = $input.first().json;\nconst status = Number(r.statusCode);\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body || {};\nconst headers = r.headers || {};\nif (!(status >= 200 && status < 300)) {\n  const e = body.error || {};\n  const extra = e.active_job_id ? ` (active job ${e.active_job_id})` : '';\n  throw new Error(`Get Job failed: HTTP ${status}` + (e.code ? ` ${e.code}: ${e.message}${extra} [request_id ${e.request_id}]` : ''));\n}\n\nif (body.status !== 'queued') throw new Error(`Get Job failed: expected status queued, got ${body.status}`);\nreturn [{ json: { job_id: body.job_id, status: body.status, dry_run: body.dry_run, cancel_requested: body.cancel_requested } }];\n"
+      },
+      "id": "67647f91-e433-5fb4-a803-7848fd5f5de1",
+      "name": "Check Get Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4840,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Dry-Run Job').first().json.job_id }}/cancel",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-cancel"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "cedd95f5-95ec-55fc-a13e-602d00df85dc",
+      "name": "Cancel Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5060,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fa0d31fb-ae3f-5c70-9c82-8780c3c08cc2",
+              "leftValue": "={{ [429, 502, 503, 504].includes(Number($json.statusCode)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "77815ed4-4615-51c8-b880-35dfaa10e82b",
+      "name": "Cancel Job Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5280,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || 2, 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "bc8898dc-6000-5304-9211-b0c992e462ba",
+      "name": "Cancel Job Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5500,
+        -160
+      ],
+      "webhookId": "89019193-680e-5261-8075-fb50c7e230d0"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Dry-Run Job').first().json.job_id }}/cancel",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-cancel"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "af7cacda-5af5-592f-b690-e6e970c7e724",
+      "name": "Cancel Job (Retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        5720,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Never logs or returns credentials: only the API response body is read.\nconst r = $input.first().json;\nconst status = Number(r.statusCode);\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body || {};\nconst headers = r.headers || {};\nif (!(status >= 200 && status < 300)) {\n  const e = body.error || {};\n  const extra = e.active_job_id ? ` (active job ${e.active_job_id})` : '';\n  throw new Error(`Cancel Job failed: HTTP ${status}` + (e.code ? ` ${e.code}: ${e.message}${extra} [request_id ${e.request_id}]` : ''));\n}\n\nif (body.status !== 'cancelled') throw new Error(`Cancel Job failed: expected status cancelled, got ${body.status}`);\nreturn [{ json: { job_id: body.job_id, status: body.status, dry_run: body.dry_run, cancel_requested: body.cancel_requested } }];\n"
+      },
+      "id": "d3510e37-13ea-55d0-8496-0fdf77a7940a",
+      "name": "Check Cancel Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5940,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Dry-Run Job').first().json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-get-again"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "24113c29-d116-5ed8-be2e-2cab868fc399",
+      "name": "Get Job Again",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6160,
+        0
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "bc0eb98a-6356-5964-a136-fcf4d8ede7c9",
+              "leftValue": "={{ [429, 502, 503, 504].includes(Number($json.statusCode)) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d093f76e-0476-56d7-8432-cc43f76a18c2",
+      "name": "Get Job Again Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        6380,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || 2, 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "9c678ce4-07b1-514c-9a00-49e06dc1dba2",
+      "name": "Get Job Again Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        6600,
+        -160
+      ],
+      "webhookId": "1d03a1e6-6b9e-519e-886b-0f112340dab0"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Dry-Run Job').first().json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-get-again"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 15000
+        }
+      },
+      "id": "f7e5d6ee-dce1-5fe5-894f-6c6792e21747",
+      "name": "Get Job Again (Retry)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        6820,
+        -160
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Never logs or returns credentials: only the API response body is read.\nconst r = $input.first().json;\nconst status = Number(r.statusCode);\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body || {};\nconst headers = r.headers || {};\nif (!(status >= 200 && status < 300)) {\n  const e = body.error || {};\n  const extra = e.active_job_id ? ` (active job ${e.active_job_id})` : '';\n  throw new Error(`Get Job Again failed: HTTP ${status}` + (e.code ? ` ${e.code}: ${e.message}${extra} [request_id ${e.request_id}]` : ''));\n}\n\nif (body.status !== 'cancelled') throw new Error(`Get Job Again failed: expected status cancelled, got ${body.status}`);\nreturn [{ json: { job_id: body.job_id, status: body.status, dry_run: body.dry_run, cancel_requested: body.cancel_requested } }];\n"
+      },
+      "id": "bdd8879d-878e-5ba6-94de-bca3e24834ea",
+      "name": "Check Get Job Again",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        7040,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "54a1d7ea-f24e-536f-accd-ccd019ec66e1",
+              "name": "store_id",
+              "value": "={{ $('Config').first().json.storeId }}",
+              "type": "string"
+            },
+            {
+              "id": "e28ff0f2-adb9-539f-bb3c-a295873d4ba7",
+              "name": "job_id",
+              "value": "={{ $('Check Create Dry-Run Job').first().json.job_id }}",
+              "type": "string"
+            },
+            {
+              "id": "27d789e2-0c5b-5428-af25-3cbe8b1de4a1",
+              "name": "ready_for_sync",
+              "value": "={{ $('Check Store Status').first().json.ready_for_sync }}",
+              "type": "boolean"
+            },
+            {
+              "id": "6df7077c-1479-5dee-b6d7-79b76ceefe69",
+              "name": "dry_run",
+              "value": "={{ $('Check Create Dry-Run Job').first().json.dry_run }}",
+              "type": "boolean"
+            },
+            {
+              "id": "7f60923d-1247-5160-aa14-64fd7dd52712",
+              "name": "initial_status",
+              "value": "={{ $('Check Create Dry-Run Job').first().json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "1a3154e6-349d-5f4f-bb5b-d2a779e0f6be",
+              "name": "final_status",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            },
+            {
+              "id": "4edc22c9-2548-52a1-b025-710c22c6ab24",
+              "name": "replayed",
+              "value": "={{ $('Check Create Dry-Run Job').first().json.replayed }}",
+              "type": "boolean"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "3e186662-3837-5563-a8d1-b63bfb82fbf3",
+      "name": "Summary",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        7260,
+        0
+      ]
     }
   ],
   "connections": {
-    "Run test": { "main": [[{ "node": "Config", "type": "main", "index": 0 }]] },
-    "Config": { "main": [[{ "node": "1 Health", "type": "main", "index": 0 }]] },
-    "1 Health": { "main": [[{ "node": "2 Store status", "type": "main", "index": 0 }]] },
-    "2 Store status": { "main": [[{ "node": "3 Create sync job (queue only)", "type": "main", "index": 0 }]] },
-    "3 Create sync job (queue only)": { "main": [[{ "node": "4 Get sync job", "type": "main", "index": 0 }]] }
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health": {
+      "main": [
+        [
+          {
+            "node": "Health Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Retry?": {
+      "main": [
+        [
+          {
+            "node": "Health Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Wait": {
+      "main": [
+        [
+          {
+            "node": "Health (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Check Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status": {
+      "main": [
+        [
+          {
+            "node": "Store Status Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status Retry?": {
+      "main": [
+        [
+          {
+            "node": "Store Status Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status Wait": {
+      "main": [
+        [
+          {
+            "node": "Store Status (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Check Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Health": {
+      "main": [
+        [
+          {
+            "node": "Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Store Status": {
+      "main": [
+        [
+          {
+            "node": "Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready?": {
+      "main": [
+        [
+          {
+            "node": "Create Dry-Run Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Dry-Run Job": {
+      "main": [
+        [
+          {
+            "node": "Create Dry-Run Job Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Dry-Run Job Retry?": {
+      "main": [
+        [
+          {
+            "node": "Create Dry-Run Job Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Create Dry-Run Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Dry-Run Job Wait": {
+      "main": [
+        [
+          {
+            "node": "Create Dry-Run Job (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Dry-Run Job (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Check Create Dry-Run Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job": {
+      "main": [
+        [
+          {
+            "node": "Get Job Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Retry?": {
+      "main": [
+        [
+          {
+            "node": "Get Job Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Get Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Job (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Check Get Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Create Dry-Run Job": {
+      "main": [
+        [
+          {
+            "node": "Get Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Job": {
+      "main": [
+        [
+          {
+            "node": "Cancel Job Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Job Retry?": {
+      "main": [
+        [
+          {
+            "node": "Cancel Job Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Cancel Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Job Wait": {
+      "main": [
+        [
+          {
+            "node": "Cancel Job (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Cancel Job (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Check Cancel Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Get Job": {
+      "main": [
+        [
+          {
+            "node": "Cancel Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Again": {
+      "main": [
+        [
+          {
+            "node": "Get Job Again Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Again Retry?": {
+      "main": [
+        [
+          {
+            "node": "Get Job Again Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Get Job Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Again Wait": {
+      "main": [
+        [
+          {
+            "node": "Get Job Again (Retry)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Job Again (Retry)": {
+      "main": [
+        [
+          {
+            "node": "Check Get Job Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Cancel Job": {
+      "main": [
+        [
+          {
+            "node": "Get Job Again",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Get Job Again": {
+      "main": [
+        [
+          {
+            "node": "Summary",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" },
-  "active": false
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
 }
