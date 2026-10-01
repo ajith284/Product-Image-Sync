@@ -163,6 +163,20 @@ export function fakeN8n() {
       } else j.cancel_requested = true;
       return { job: view(j), changed: true };
     }),
+    startJob: vi.fn(async (keyId: string, jobId: string, _requestId: string, workerId: string) => {
+      const k = check(keyId, "n8n:sync", null);
+      const j = jobs.find((x) => x.job_id === jobId && x.workspace_id === k.workspaceId && (!k.storeId || x.store_id === k.storeId));
+      if (!j) throw new N8nApiError("JOB_NOT_FOUND");
+      const w = j as Job & { worker_id?: string };
+      if (j.status === "queued") {
+        j.status = "running";
+        j.started_at = new Date().toISOString();
+        w.worker_id = workerId;
+        return { job: view(j), claimed: true, reason: "claimed" as const };
+      }
+      if (j.status === "running") return { job: view(j), claimed: false, reason: "already_running" as const };
+      return { job: view(j), claimed: false, reason: "finished" as const };
+    }),
   };
 
   return { repo, keys, jobs, stores, addKey, limits, buckets };

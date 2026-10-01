@@ -49,6 +49,13 @@ export interface N8nRepository {
     cursor: { createdAt: string; id: string } | null;
   }): Promise<JobJson[]>;
   cancelJob(keyId: string, jobId: string, requestId: string): Promise<{ job: JobJson; changed: boolean }>;
+  /** Claims the job for one worker (Prompt 13). Not claimed → reason already_running | finished. */
+  startJob(
+    keyId: string,
+    jobId: string,
+    requestId: string,
+    workerId: string,
+  ): Promise<{ job: JobJson; claimed: boolean; reason: "claimed" | "reclaimed" | "already_running" | "finished" }>;
 }
 
 type PgError = { message?: string; details?: string | null } | null;
@@ -150,6 +157,22 @@ export function createN8nRepository(): N8nRepository {
       const row = data?.[0];
       if (!row) throw new N8nApiError("INTERNAL_ERROR");
       return { job: row.job as JobJson, changed: row.changed === true };
+    },
+    async startJob(keyId, jobId, requestId, workerId) {
+      const { data, error } = await db.rpc("n8n_start_sync_job", {
+        p_key_id: keyId,
+        p_job_id: jobId,
+        p_request_id: requestId,
+        p_worker_id: workerId,
+      });
+      if (error) fail(error);
+      const row = data?.[0];
+      if (!row) throw new N8nApiError("INTERNAL_ERROR");
+      return {
+        job: row.job as JobJson,
+        claimed: row.claimed === true,
+        reason: row.reason as "claimed" | "reclaimed" | "already_running" | "finished",
+      };
     },
   };
 }

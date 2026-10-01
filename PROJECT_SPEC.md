@@ -19,7 +19,7 @@ Customers never use n8n directly. The app handles: login · multiple Shopify sto
 | Supabase project | `https://xkzccfxrixpyozfhamdh.supabase.co` (ref `xkzccfxrixpyozfhamdh`) |
 | n8n master workflow | **Shopify image Uploaded automation** — ID `qrV4vJjAa2Jbbgmp` |
 
-Reuse or safely update this workflow. Never create one workflow per store, and don't create duplicates.
+Legacy workflow reference only. **Do not modify, rename, delete, activate/deactivate, repurpose, execute, add/remove nodes, change credentials, or change triggers.** New Product Image Sync workflows stay separate.
 
 ## 3. Architecture
 
@@ -96,18 +96,17 @@ Run 1 uploads 01–03 → run 2 (no changes) uploads nothing → image-04 added 
 
 ## 8. n8n (internal only)
 
-Target flow:
+Implemented flow (Prompt 13, `docs/n8n/product-image-sync-production.workflow.json`):
 ```
-Schedule / Manual trigger
-→ get connected stores → loop stores
-→ backend discovers Drive product folders → loop folders
-→ backend processes each folder → save result
-→ continue even if one item or store fails
+Manual / Schedule trigger → Config → Health → Store Status → Ready?
+→ POST /sync-jobs (dry_run:false, Idempotency-Key) → POST /sync-jobs/{jobId}/run (server-side worker)
+→ poll GET /sync-jobs/{jobId} (bounded) → completed / cancelled / failed → summary
 ```
-- n8n works with IDs only: `store_id`, `drive_product_folder_id`.
-- n8n knows only the backend URL, an internal shared secret (`INTERNAL_SYNC_SECRET`) and safe IDs.
-- n8n must **not** store: Shopify access/refresh tokens, Google access/refresh tokens, Supabase service-role credentials.
-- n8n calls secure application backend endpoints; the backend loads credentials.
+- n8n works with IDs only: `store_id`, `job_id`. The worker (not n8n) discovers category roots → code folders → product folders → images.
+- n8n authenticates ONLY with the Product Image Sync API key (Header Auth credential "Product Image Sync API", `docs/n8n-api.md`).
+- n8n must **not** store or receive: Shopify access/refresh tokens, Google access/refresh tokens, Supabase credentials.
+- The backend loads credentials; one job = one worker (lease); the workflow never cancels jobs by itself.
+- Existing workflows "Shopify image Uploaded automation" (`qrV4vJjAa2Jbbgmp`) and "Product Image Sync — API Test" (`5uS72dDfrLYKZd1j`) are separate and never modified.
 
 ## 9. Supabase
 
@@ -153,7 +152,7 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 
 **Never automatically continue to another phase.**
 
-## 14. Current state (updated 2026-09-30)
+## 14. Current state (updated 2026-10-02)
 
 ### Phase log
 - **Phase 0 — Audit:** repo and Supabase were empty; this spec created.
@@ -204,9 +203,20 @@ Before implementing anything touching Shopify, Google, Supabase or n8n: check th
 ### Environment
 - **Local repo** `C:\Users\ajith\Desktop\shopify-image-uploaded-automation` — branch `main`, remote `origin` = GitHub.
 - **GitHub** `ajith284/product-image-sync` (public).
-- **Supabase** `xkzccfxrixpyozfhamdh` — migrations through Phase 3 applied. No storage buckets.
+- **Supabase** `xkzccfxrixpyozfhamdh` — Prompt 13 migration `20261001220000_sync_worker.sql` applied; migration history repaired for the preceding n8n/image-sync migrations. No storage buckets.
 - **Supabase Data API (confirmed 2026-09-29):** exposed schemas = `public`, `graphql_public` only. `internal` and `private` are NOT exposed. Automatic table exposure is disabled.
 - **`.mcp.json`** points at `xkzccfxrixpyozfhamdh` (fixed).
 
+### Prompt 13 — Full sync worker + n8n production workflow (done)
+- **Drive hierarchy:** Category Root → Code Folder → Product Name Folder → Images. **Only the Product Name Folder is matched to Shopify** (never the code folder, category folder, SKU or filename).
+- **Worker:** `lib/sync/worker.ts` `runSyncJob()` = claim → scan each category root (`scanCategoryRoots`) → `sync_items` per product folder → 0 / 2+ matches = review (no download/upload) → single match: duplicate check → `downloadDriveImage()` → `uploadProductImage()` → progress → completed / completed_with_errors / cancelled / failed. Deps in `lib/sync/runtime.ts`, DB access `lib/sync/jobs-repository.ts`, background start `lib/sync/launch.ts` (`after()`).
+- **Migration** `20261001220000_sync_worker.sql`: `sync_jobs.worker_id / claimed_at / heartbeat_at / result`; `sync_items.category_root_id / code_folder_id / code_folder_name / match_candidates / images_skipped / images_failed` + unique (job, product folder); functions `n8n_start_sync_job`, `sync_job_claim`, `sync_job_heartbeat`, `sync_job_finish`, `sync_item_record`, `sync_item_update` (service role only; each re-checks workspace → job → worker lease). Tests: `supabase/tests/sync_worker_test.sql`.
+- **API:** `POST /api/n8n/v1/sync-jobs/{jobId}/run` (scope `n8n:sync`): 202 claimed/reclaimed, 200 already_running/finished. No body accepted.
+- **Lifecycle:** `queued → running → completed | completed_with_errors | failed | cancelled`. Lease 15 min; stale lease → re-claim (crash recovery); restart is idempotent.
+- **Dry run:** scan + match + metadata only; no download, upload, Drive/Shopify mutation or `sync_images` write; `result.plan` = would_upload / skipped / blocked / review / failed.
+- **Prompt 13 real validation (2026-10-02):** real n8n → API → worker dry run `fab524f5-05d7-46eb-9352-c142777d0333` completed with `dry_run=true`, 0 products processed, 0 images uploaded and 0 failed items. Live harness passed 2/2 and verified 0 Drive downloads, 0 Drive writes, 0 Shopify mutations and 0 `sync_images` mutations. Regression suite: 492/492 tests passed; typecheck, lint and production build passed. Nullable `sync_job_finish` / `sync_item_update` RPC arguments now send explicit nulls and are covered by `tests/jobs-repository-null-rpc.test.ts`.
+- **Errors:** temporary errors retried ×3 (Retry-After); permanent file errors fail that image only; Shopify needs reconnect or Google unavailable → job `failed`, completed work kept. Cancellation checked before every root, product, image, download, upload.
+- **n8n:** production workflow (Manual + Schedule 02:00 Asia/Kolkata, inactive on import) and a manual-only dry-run test workflow, generated by `scripts/generate-n8n-workflows.py`, validated by `scripts/check-n8n-workflows.mjs`. `baseUrl` (ngrok) is DEVELOPMENT ONLY.
+
 ### Not built yet
-Member invites, password reset, Shopify OAuth routes + token storage/refresh, Google Drive OAuth, sync engine, n8n endpoints.
+Member invites, password reset. (Shopify OAuth, Google Drive OAuth, the n8n API and the sync worker are built — see the phase entries above and `docs/`.)

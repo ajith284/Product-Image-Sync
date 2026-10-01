@@ -531,6 +531,12 @@ export type Database = {
       }
       sync_items: {
         Row: {
+          category_root_id: string | null
+          code_folder_id: string | null
+          code_folder_name: string | null
+          images_failed: number
+          images_skipped: number
+          match_candidates: Json
           created_at: string
           drive_folder_id: string
           drive_folder_name: string | null
@@ -547,6 +553,12 @@ export type Database = {
           updated_at: string
         }
         Insert: {
+          category_root_id?: string | null
+          code_folder_id?: string | null
+          code_folder_name?: string | null
+          images_failed?: number
+          images_skipped?: number
+          match_candidates?: Json
           created_at?: string
           drive_folder_id: string
           drive_folder_name?: string | null
@@ -563,6 +575,12 @@ export type Database = {
           updated_at?: string
         }
         Update: {
+          category_root_id?: string | null
+          code_folder_id?: string | null
+          code_folder_name?: string | null
+          images_failed?: number
+          images_skipped?: number
+          match_candidates?: Json
           created_at?: string
           drive_folder_id?: string
           drive_folder_name?: string | null
@@ -618,6 +636,10 @@ export type Database = {
           trigger_type: string
           warnings_count: number
           workspace_id: string
+          claimed_at: string | null
+          heartbeat_at: string | null
+          result: Json
+          worker_id: string | null
         }
         Insert: {
           cancel_requested_at?: string | null
@@ -648,6 +670,10 @@ export type Database = {
           trigger_type?: string
           warnings_count?: number
           workspace_id?: string
+          claimed_at?: string | null
+          heartbeat_at?: string | null
+          result?: Json
+          worker_id?: string | null
         }
         Update: {
           cancel_requested_at?: string | null
@@ -678,6 +704,10 @@ export type Database = {
           trigger_type?: string
           warnings_count?: number
           workspace_id?: string
+          claimed_at?: string | null
+          heartbeat_at?: string | null
+          result?: Json
+          worker_id?: string | null
         }
         Relationships: [
           {
@@ -924,6 +954,16 @@ export type Database = {
         }
         Returns: { job: Json; replayed: boolean }[]
       }
+      n8n_start_sync_job: {
+        Args: {
+          p_job_id: string
+          p_key_id: string
+          p_lease_seconds?: number
+          p_request_id: string
+          p_worker_id: string
+        }
+        Returns: { claimed: boolean; job: Json; reason: string }[]
+      }
       n8n_get_sync_job: {
         Args: { p_job_id: string; p_key_id: string }
         Returns: Json
@@ -1070,6 +1110,45 @@ export type Database = {
       }
       sync_image_record_attempt: {
         Args: { p_image_id: string; p_store_id: string; p_workspace_id: string }
+        Returns: Json
+      }
+      sync_item_record: {
+        Args: { p_item: Json; p_job_id: string; p_worker_id: string; p_workspace_id: string }
+        Returns: string
+      }
+      sync_item_update: {
+        Args: {
+          p_error_message?: string
+          p_images_failed: number
+          p_images_skipped: number
+          p_images_uploaded: number
+          p_item_id: string
+          p_job_id: string
+          p_status: string
+          p_worker_id: string
+          p_workspace_id: string
+        }
+        Returns: undefined
+      }
+      sync_job_claim: {
+        Args: { p_job_id: string; p_lease_seconds?: number; p_worker_id: string; p_workspace_id: string }
+        Returns: { claimed: boolean; job: Json; reason: string }[]
+      }
+      sync_job_finish: {
+        Args: {
+          p_error_code?: string
+          p_error_message?: string
+          p_job_id: string
+          p_progress: Json
+          p_result: Json
+          p_status: string
+          p_worker_id: string
+          p_workspace_id: string
+        }
+        Returns: Json
+      }
+      sync_job_heartbeat: {
+        Args: { p_job_id: string; p_progress?: Json; p_worker_id: string; p_workspace_id: string }
         Returns: Json
       }
     }

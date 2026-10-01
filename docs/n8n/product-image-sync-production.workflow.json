@@ -1,0 +1,1789 @@
+{
+  "name": "Product Image Sync — Production",
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## Product Image Sync — Production\nCreates a REAL sync job (dry_run=false), starts the server-side worker, polls until it finishes.\n\nn8n only calls the Product Image Sync API with the **Product Image Sync API** Header Auth credential. Google and Shopify tokens never leave the server.\n\n**baseUrl in Config is DEVELOPMENT ONLY (ngrok).** Replace it with the production API URL before activating.",
+        "height": 340,
+        "width": 420,
+        "color": 5
+      },
+      "id": "edb3d7a8-d8a4-53d8-b1a9-9e1099122b12",
+      "name": "Note: About",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -420
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## Schedule (conservative default)\nOnce a day at **02:00 Asia/Kolkata** (workflow timezone setting).\n\nThe workflow is imported **inactive** — the schedule does nothing until you activate it. Only one job per store can be active: a run that starts while a job is still active stops at **Stop: Job Creation Conflict** (409) and changes nothing.",
+        "height": 260,
+        "width": 420,
+        "color": 6
+      },
+      "id": "9078588b-b03f-5c7d-b0a8-f4b04b1c1000",
+      "name": "Note: Schedule",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        260
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "f440ba58-0681-507d-897f-45d7503f27f8",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "days",
+              "daysInterval": 1,
+              "triggerAtHour": 2,
+              "triggerAtMinute": 0
+            }
+          ]
+        }
+      },
+      "id": "a8bb6dd6-0d87-57ea-bf37-0cf50accbe3f",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "bcf51cbb-fed8-59b8-adb9-5baf81178a26",
+              "name": "baseUrl",
+              "value": "https://reach-rental-heat.ngrok-free.dev/api/n8n/v1",
+              "type": "string"
+            },
+            {
+              "id": "f28ee9f3-b73d-526b-b1f8-41f991998aa9",
+              "name": "baseUrlNote",
+              "value": "DEVELOPMENT ONLY — ngrok tunnel. Replace baseUrl with the production API URL.",
+              "type": "string"
+            },
+            {
+              "id": "9330dbd2-88a4-53c9-91f8-7add6645ea16",
+              "name": "storeId",
+              "value": "7bb362f0-ce91-4b0b-a81b-373d49f2b242",
+              "type": "string"
+            },
+            {
+              "id": "ca657801-c5e1-519b-8c9e-25b48b726561",
+              "name": "triggerSource",
+              "value": "={{ $('Schedule Trigger').isExecuted ? 'scheduled' : 'n8n' }}",
+              "type": "string"
+            },
+            {
+              "id": "8ea00bc7-92fa-5711-a6ba-6c7566dba679",
+              "name": "dryRun",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "bce6b81f-a62e-5202-8371-12c8bcb49417",
+              "name": "maxRetries",
+              "value": 3,
+              "type": "number"
+            },
+            {
+              "id": "760353bd-0783-57c9-a681-132e4a2e85a4",
+              "name": "pollIntervalSeconds",
+              "value": 30,
+              "type": "number"
+            },
+            {
+              "id": "ab638a5d-2321-5cd0-8290-0be67fd6f7e6",
+              "name": "maxPolls",
+              "value": 240,
+              "type": "number"
+            },
+            {
+              "id": "f8294c0a-1fca-58bd-a42e-c5bd489dbb1b",
+              "name": "maxPollMinutes",
+              "value": 120,
+              "type": "number"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      },
+      "id": "49061cb4-ba69-5d35-aba5-02fe1787eec3",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        220,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "035c8eaa-b532-5f7a-8341-e67b2c475dec",
+                    "leftValue": "={{ [401, 403].includes(Number($json.http_status)) }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "auth"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8446d5f7-c2aa-534d-9d4b-03c0561d1859",
+                    "leftValue": "={{ $json.code === 'STORE_NOT_FOUND' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "store_not_found"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "c289cbe9-27bd-5d73-8c35-48d6b05f24c7",
+                    "leftValue": "={{ $json.step === 'Create Sync Job' && [409, 422].includes(Number($json.http_status)) }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "job_conflict"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "683af041-dc09-5816-8c2f-1238bd12bd14",
+                    "leftValue": "={{ $json.step === 'Start Worker' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "worker_start"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra",
+          "renameFallbackOutput": "other"
+        }
+      },
+      "id": "51d983dc-8d45-5eab-a7e4-a49d6212f3de",
+      "name": "API Error Type",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        3800,
+        900
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Product Image Sync API authentication failed (check the \"Product Image Sync API\" credential and its scopes)' + ' at ' + $json.step + ': HTTP ' + $json.http_status + ' ' + $json.code + ' — ' + $json.message + ' [request_id ' + $json.request_id + ']' }}"
+      },
+      "id": "0acb7520-936e-53d7-8cdd-12e50e85b8c5",
+      "name": "Stop: API Auth Failure",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        640
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Store not found or not accessible with this API key' + ' at ' + $json.step + ': HTTP ' + $json.http_status + ' ' + $json.code + ' — ' + $json.message + ' [request_id ' + $json.request_id + ']' }}"
+      },
+      "id": "4fd61990-27b7-5953-a4fb-bf7a30e23cac",
+      "name": "Stop: Store Not Found",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        800
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Sync job not created' + ' at ' + $json.step + ': HTTP ' + $json.http_status + ' ' + $json.code + ' — ' + $json.message + ' [request_id ' + $json.request_id + ']' + ($json.active_job_id ? ' (active job ' + $json.active_job_id + ')' : '') }}"
+      },
+      "id": "2b64616f-b5dc-5ffa-ac0f-3f5e9804c5c1",
+      "name": "Stop: Job Creation Conflict",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        960
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'The sync worker could not be started' + ' at ' + $json.step + ': HTTP ' + $json.http_status + ' ' + $json.code + ' — ' + $json.message + ' [request_id ' + $json.request_id + ']' }}"
+      },
+      "id": "689939cb-a152-5b7d-9ef2-704ecef27eed",
+      "name": "Stop: Worker Start Failure",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        1120
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Product Image Sync API error' + ' at ' + $json.step + ': HTTP ' + $json.http_status + ' ' + $json.code + ' — ' + $json.message + ' [request_id ' + $json.request_id + ']' }}"
+      },
+      "id": "b0aa339f-87c1-5791-84f9-0b331f0d40db",
+      "name": "Stop: API Error",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        4080,
+        1280
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/health",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-health"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "2a922c12-333e-5696-b17e-15a09b4b3239",
+      "name": "Health",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        440,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "ccd59a27-c512-5d42-9579-81abbfe53a11",
+              "leftValue": "={{ ([429, 502, 503, 504].includes(Number($json.statusCode)) || !$json.statusCode) && $runIndex < $('Config').first().json.maxRetries }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "51fb73a1-7dfe-540b-a3e2-ee5ff3eb7549",
+      "name": "Health Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        660,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || Math.pow(2, $runIndex + 1), 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "95beebb3-f545-58b6-ad88-fcbc0e9980e3",
+      "name": "Health Retry Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        660,
+        -200
+      ],
+      "webhookId": "02783179-bc16-5e24-908b-ee0dbcf144e6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads only the API response (status, body, retry-after). Never reads or returns credentials.\nconst r = $input.first().json || {};\nconst status = Number(r.statusCode) || 0;\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body && typeof body === 'object' ? body : {};\nconst headers = r.headers || {};\nconst err = body.error || {};\nconst safe = (v, n = 300) => (v === undefined || v === null ? null : String(v).slice(0, n));\nconst failure = (code, message) => [{ json: {\n  ok: false,\n  step: \"Health\",\n  http_status: status,\n  code: safe(err.code || code, 60),\n  message: safe(err.message || message),\n  request_id: safe(err.request_id || headers['x-request-id'], 100),\n  active_job_id: safe(err.active_job_id, 36),\n} }];\nif (!status) return failure('NETWORK_ERROR', 'The Product Image Sync API could not be reached (network error or timeout).');\n\nif (status !== 200 || body.ok !== true) return failure('HEALTH_FAILED', 'The API health check failed.');\nreturn [{ json: { ok: true, service: safe(body.service, 60), version: safe(body.version, 40) } }];\n"
+      },
+      "id": "13dae036-d5b7-56ff-b1e5-7461fde46f6c",
+      "name": "Check Health",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "18b599ff-4a6e-589c-b06c-a3727ac2ea2d",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6ee160e1-4c59-54c0-9ff7-113f815dd816",
+      "name": "Health OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1100,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/stores/{{ $('Config').first().json.storeId }}/status",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-status"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "bfe99dc8-69b0-5ffe-929d-6ea808c3f593",
+      "name": "Store Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1340,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "87688288-149e-5cc3-a4f4-8911b89d9f3e",
+              "leftValue": "={{ ([429, 502, 503, 504].includes(Number($json.statusCode)) || !$json.statusCode) && $runIndex < $('Config').first().json.maxRetries }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f3a4e256-cb60-53e6-a44b-8a9136b460f6",
+      "name": "Store Status Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1560,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || Math.pow(2, $runIndex + 1), 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "644f693d-35b4-504e-8536-6043a26b354c",
+      "name": "Store Status Retry Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        1560,
+        -200
+      ],
+      "webhookId": "2360067f-93b8-5d75-87fb-cf86c77613f3"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads only the API response (status, body, retry-after). Never reads or returns credentials.\nconst r = $input.first().json || {};\nconst status = Number(r.statusCode) || 0;\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body && typeof body === 'object' ? body : {};\nconst headers = r.headers || {};\nconst err = body.error || {};\nconst safe = (v, n = 300) => (v === undefined || v === null ? null : String(v).slice(0, n));\nconst failure = (code, message) => [{ json: {\n  ok: false,\n  step: \"Store Status\",\n  http_status: status,\n  code: safe(err.code || code, 60),\n  message: safe(err.message || message),\n  request_id: safe(err.request_id || headers['x-request-id'], 100),\n  active_job_id: safe(err.active_job_id, 36),\n} }];\nif (!status) return failure('NETWORK_ERROR', 'The Product Image Sync API could not be reached (network error or timeout).');\n\nif (status !== 200) return failure('STORE_STATUS_FAILED', 'The store status could not be read.');\nconst shopify = body.shopify || {};\nconst drive = body.google_drive || {};\nreturn [{ json: {\n  ok: true,\n  store_id: body.store_id,\n  store_name: safe(body.store_name, 120),\n  shopify_connected: shopify.connected === true,\n  shopify_status: safe(shopify.status, 40),\n  google_drive_connected: drive.connected === true,\n  root_folder_selected: drive.root_folder_selected === true,\n  ready_for_sync: body.ready_for_sync === true,\n} }];\n"
+      },
+      "id": "fc62f350-63c5-5374-a4d5-59168f38d25f",
+      "name": "Check Store Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fffb3d9d-06a2-511e-a4b8-3fa4e390ec63",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "135f157d-74c5-5b5e-8249-ed3485d8cd36",
+      "name": "Store Status OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2000,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "63610a1d-16fc-5653-bcd6-37ecc9ad6fcb",
+              "leftValue": "={{ $json.ready_for_sync === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "a53c4cc1-513d-5746-9265-02b50232ff2d",
+      "name": "Ready?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Store ' + $json.store_id + ' is not ready for sync: shopify_connected=' + $json.shopify_connected + ' (' + $json.shopify_status + '), google_drive_connected=' + $json.google_drive_connected + ', root_folder_selected=' + $json.root_folder_selected }}"
+      },
+      "id": "18d36cc2-be24-5758-811d-5659056412b9",
+      "name": "Not Ready",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        2460,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            },
+            {
+              "name": "Idempotency-Key",
+              "value": "=n8n-{{ $execution.id }}-create"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-create"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ store_id: $('Config').first().json.storeId, trigger_source: $('Config').first().json.triggerSource, dry_run: $('Config').first().json.dryRun }) }}",
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "3c31fa76-2292-50fd-a20d-9b997bbc3843",
+      "name": "Create Sync Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2460,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "01c15a9d-9d97-5440-b9f9-951a6bf6bcd4",
+              "leftValue": "={{ ([429, 502, 503, 504].includes(Number($json.statusCode)) || !$json.statusCode) && $runIndex < $('Config').first().json.maxRetries }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d7f5ed8b-6068-5252-9cbd-9a071e0e39ef",
+      "name": "Create Sync Job Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2680,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || Math.pow(2, $runIndex + 1), 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "4b35b44a-f13e-54a7-afca-44134748cf82",
+      "name": "Create Sync Job Retry Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        2680,
+        -200
+      ],
+      "webhookId": "3553f683-2687-53d4-bb7f-2cef0baa0eb6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads only the API response (status, body, retry-after). Never reads or returns credentials.\nconst r = $input.first().json || {};\nconst status = Number(r.statusCode) || 0;\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body && typeof body === 'object' ? body : {};\nconst headers = r.headers || {};\nconst err = body.error || {};\nconst safe = (v, n = 300) => (v === undefined || v === null ? null : String(v).slice(0, n));\nconst failure = (code, message) => [{ json: {\n  ok: false,\n  step: \"Create Sync Job\",\n  http_status: status,\n  code: safe(err.code || code, 60),\n  message: safe(err.message || message),\n  request_id: safe(err.request_id || headers['x-request-id'], 100),\n  active_job_id: safe(err.active_job_id, 36),\n} }];\nif (!status) return failure('NETWORK_ERROR', 'The Product Image Sync API could not be reached (network error or timeout).');\n\nif (status !== 201 && status !== 200) return failure('CREATE_FAILED', 'The sync job could not be created.');\nif (body.dry_run !== false) return failure('UNEXPECTED_MODE', 'The created job has the wrong dry_run mode.');\nreturn [{ json: {\n  ok: true,\n  job_id: body.job_id,\n  store_id: body.store_id,\n  status: body.status,\n  dry_run: body.dry_run,\n  trigger_source: body.trigger_source,\n  replayed: String(headers['idempotent-replayed'] || '') === 'true',\n} }];\n"
+      },
+      "id": "ac1048f2-b8a7-59bc-a9da-97baedf156d2",
+      "name": "Check Create Sync Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2900,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "fb3983e7-7978-553d-8346-c5424eb841ea",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "272e73a1-8909-5862-b2bc-66d2f97c429b",
+      "name": "Create Sync Job OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3120,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Sync Job').first().json.job_id }}/run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-run"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "55c75b1c-172a-574a-a7e4-57ac83f69725",
+      "name": "Start Worker",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3360,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "6ddcc596-7199-5e56-8863-55bb331809d0",
+              "leftValue": "={{ ([429, 502, 503, 504].includes(Number($json.statusCode)) || !$json.statusCode) && $runIndex < $('Config').first().json.maxRetries }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "230090c5-29a0-57be-8650-6a4ff161e7f2",
+      "name": "Start Worker Retry?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3580,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number(($json.headers || {})['retry-after']) || Math.pow(2, $runIndex + 1), 1), 60) }}",
+        "unit": "seconds"
+      },
+      "id": "bc846c62-8e53-551a-9fcd-9ff553d56073",
+      "name": "Start Worker Retry Wait",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        3580,
+        -200
+      ],
+      "webhookId": "f36788b8-9b4f-5677-88a7-ee043f6eb346"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads only the API response (status, body, retry-after). Never reads or returns credentials.\nconst r = $input.first().json || {};\nconst status = Number(r.statusCode) || 0;\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body && typeof body === 'object' ? body : {};\nconst headers = r.headers || {};\nconst err = body.error || {};\nconst safe = (v, n = 300) => (v === undefined || v === null ? null : String(v).slice(0, n));\nconst failure = (code, message) => [{ json: {\n  ok: false,\n  step: \"Start Worker\",\n  http_status: status,\n  code: safe(err.code || code, 60),\n  message: safe(err.message || message),\n  request_id: safe(err.request_id || headers['x-request-id'], 100),\n  active_job_id: safe(err.active_job_id, 36),\n} }];\nif (!status) return failure('NETWORK_ERROR', 'The Product Image Sync API could not be reached (network error or timeout).');\n\n// 202 claimed / reclaimed = worker started. 200 already_running = a worker already holds the job\n// (e.g. a retried request); 200 finished = the job already ended. Polling reports the outcome either way.\nif (status !== 202 && status !== 200) return failure('WORKER_START_FAILED', 'The sync worker could not be started.');\nreturn [{ json: {\n  ok: true,\n  job_id: body.job_id,\n  status: body.status,\n  claimed: body.claimed === true,\n  reason: safe(body.reason, 40),\n  poll_started_at: Date.now(),\n} }];\n"
+      },
+      "id": "8c0a40cb-8be1-58c6-ab7e-ebfe971be851",
+      "name": "Check Start Worker",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3800,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "46b64b9f-299f-5475-8df1-1e4052f20084",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "72b8e0e3-e466-5fa5-bcd7-dfd270d7e22d",
+      "name": "Start Worker OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4020,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $('Config').first().json.baseUrl }}/sync-jobs/{{ $('Check Create Sync Job').first().json.job_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "ngrok-skip-browser-warning",
+              "value": "true"
+            },
+            {
+              "name": "X-Request-ID",
+              "value": "=n8n-{{ $execution.id }}-poll-{{ $runIndex }}"
+            }
+          ]
+        },
+        "options": {
+          "response": {
+            "response": {
+              "fullResponse": true,
+              "neverError": true,
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 20000
+        }
+      },
+      "id": "b27042b8-e398-5493-ac83-21cd53318e07",
+      "name": "Poll Job",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        4260,
+        0
+      ],
+      "onError": "continueRegularOutput",
+      "credentials": {
+        "httpHeaderAuth": {
+          "name": "Product Image Sync API"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Reads only the API response (status, body, retry-after). Never reads or returns credentials.\nconst r = $input.first().json || {};\nconst status = Number(r.statusCode) || 0;\nlet body = r.body;\nif (typeof body === 'string') { try { body = JSON.parse(body); } catch (e) { body = {}; } }\nbody = body && typeof body === 'object' ? body : {};\nconst headers = r.headers || {};\nconst err = body.error || {};\nconst safe = (v, n = 300) => (v === undefined || v === null ? null : String(v).slice(0, n));\nconst failure = (code, message) => [{ json: {\n  ok: false,\n  step: \"Poll Job\",\n  http_status: status,\n  code: safe(err.code || code, 60),\n  message: safe(err.message || message),\n  request_id: safe(err.request_id || headers['x-request-id'], 100),\n  active_job_id: safe(err.active_job_id, 36),\n} }];\n\n// 429 / 5xx / network errors while polling = \"not finished yet\": the poll loop retries (bounded).\nif (!status || [429, 502, 503, 504].includes(status)) {\n  return [{ json: { ok: true, finished: false, transient: true, http_status: status, poll: $runIndex + 1,\n                    retry_after: Number(headers['retry-after']) || null } }];\n}\nif (status !== 200) return failure('POLL_FAILED', 'The sync job could not be read.');\nconst terminal = ['completed', 'completed_with_errors', 'failed', 'cancelled'];\nreturn [{ json: {\n  ok: true,\n  finished: terminal.includes(body.status),\n  transient: false,\n  poll: $runIndex + 1,\n  retry_after: Number(headers['retry-after']) || null,\n  job: {\n    job_id: body.job_id,\n    store_id: body.store_id,\n    status: body.status,\n    trigger_source: body.trigger_source,\n    dry_run: body.dry_run,\n    cancel_requested: body.cancel_requested === true,\n    progress: body.progress || {},\n    result: body.result || {},\n    error: body.error || null,\n    started_at: body.started_at || null,\n    completed_at: body.completed_at || null,\n    cancelled_at: body.cancelled_at || null,\n  },\n} }];\n"
+      },
+      "id": "d60941e1-aaa6-5744-bc85-350089f803dd",
+      "name": "Check Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4480,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "16b5fe58-9459-563e-8a22-3514919fd539",
+              "leftValue": "={{ $json.ok === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "3e0fd0dd-e1c1-56ec-9341-451ff7472a1b",
+      "name": "Poll OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4700,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "7ec8bc27-3081-5091-82a8-2b67002af2ac",
+              "leftValue": "={{ $json.finished === true }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "ca450ae6-c7d4-58c2-86c8-47a91e54b8b4",
+      "name": "Job Finished?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        4920,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "8b6f2b67-63d8-583a-91da-a05eb7722548",
+              "leftValue": "={{ $runIndex + 1 >= $('Config').first().json.maxPolls || Date.now() - $('Check Start Worker').first().json.poll_started_at > $('Config').first().json.maxPollMinutes * 60000 }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "3e38b578-8154-5f51-85ed-84ce8d396ed6",
+      "name": "Poll Limit Reached?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        5140,
+        220
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Sync job ' + $('Check Create Sync Job').first().json.job_id + ' did not finish within ' + $('Config').first().json.maxPolls + ' polls / ' + $('Config').first().json.maxPollMinutes + ' minutes. The job keeps running on the server — check it later with GET /sync-jobs/{jobId}. It was NOT cancelled.' }}"
+      },
+      "id": "07225f58-34da-59f4-93f1-b584e8580da7",
+      "name": "Stop: Poll Timeout",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        5360,
+        420
+      ]
+    },
+    {
+      "parameters": {
+        "amount": "={{ Math.min(Math.max(Number($('Check Job').last().json.retry_after) || $('Config').first().json.pollIntervalSeconds, 5), 300) }}",
+        "unit": "seconds"
+      },
+      "id": "ddcff86d-2862-58d9-bac2-e54014325793",
+      "name": "Wait Before Next Poll",
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        5360,
+        220
+      ],
+      "webhookId": "914c433c-129a-513a-991e-98d65f64a4f5"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Safe job summary only: IDs, status, counts, timestamps, safe error code/message.\nconst j = $input.first().json.job || {};\nconst p = j.progress || {};\nconst res = j.result || {};\nconst err = j.error && typeof j.error === 'object' ? { code: j.error.code || null, message: j.error.message || null } : null;\nreturn [{ json: {\n  store_id: j.store_id,\n  job_id: j.job_id,\n  status: j.status,\n  trigger_source: j.trigger_source,\n  dry_run: j.dry_run === true,\n  progress: {\n    total: p.total ?? 0, processed: p.processed ?? 0, uploaded: p.uploaded ?? 0,\n    skipped: p.skipped ?? 0, review: p.review ?? 0, failed: p.failed ?? 0,\n  },\n  counts: {\n    products: res.products ?? p.total ?? 0,\n    uploaded: res.uploaded ?? p.uploaded ?? 0,\n    skipped: res.skipped ?? p.skipped ?? 0,\n    blocked: res.blocked ?? 0,\n    review: res.review ?? p.review ?? 0,\n    failed: res.failed ?? p.failed ?? 0,\n    warnings: Array.isArray(res.warnings) ? res.warnings.length : 0,\n    ...(res.plan ? { would_upload: res.plan.would_upload ?? 0 } : {}),\n  },\n  review_items: Array.isArray(res.review_items) ? res.review_items.slice(0, 50) : [],\n  failed_items: Array.isArray(res.failed_items) ? res.failed_items.slice(0, 50) : [],\n  started_at: j.started_at,\n  completed_at: j.completed_at,\n  cancelled_at: j.cancelled_at,\n  error: err,\n  polls: $input.first().json.poll ?? null,\n} }];\n"
+      },
+      "id": "20705cf1-0613-5ebf-9a19-fefd1d8b981b",
+      "name": "Build Summary",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5140,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "2d421b0d-2620-5dcc-9101-17f7206a2f18",
+                    "leftValue": "={{ ['completed', 'completed_with_errors'].includes($json.status) }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "completed"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "8849eaa5-4f6f-5dd9-8c55-339e13afd5dc",
+                    "leftValue": "={{ $json.status === 'cancelled' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cancelled"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "13b51816-00f4-5fcb-8288-88d2b2251746",
+                    "leftValue": "={{ $json.status === 'failed' }}",
+                    "rightValue": "",
+                    "operator": {
+                      "type": "boolean",
+                      "operation": "true",
+                      "singleValue": true
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "failed"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "e65ba9e3-d61b-51ea-a8eb-b6106a15de52",
+      "name": "Job Result",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        5360,
+        -200
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "6b2437ff-fc33-5f35-8898-9b68441751b5",
+      "name": "Sync Completed",
+      "type": "n8n-nodes-base.noOp",
+      "typeVersion": 1,
+      "position": [
+        5640,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Sync job was cancelled' + ' (job ' + $json.job_id + ', store ' + $json.store_id + '): processed ' + $json.progress.processed + '/' + $json.progress.total + ', uploaded ' + $json.progress.uploaded + ', skipped ' + $json.progress.skipped + ', review ' + $json.progress.review + ', failed ' + $json.progress.failed + '. Completed uploads were kept.' }}"
+      },
+      "id": "9bbb019b-f31d-5603-9e9f-2bbd452ea6d3",
+      "name": "Stop: Job Cancelled",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        5640,
+        -200
+      ]
+    },
+    {
+      "parameters": {
+        "errorMessage": "={{ 'Sync job failed' + ' (job ' + $json.job_id + ', store ' + $json.store_id + '): processed ' + $json.progress.processed + '/' + $json.progress.total + ', uploaded ' + $json.progress.uploaded + ', skipped ' + $json.progress.skipped + ', review ' + $json.progress.review + ', failed ' + $json.progress.failed + ($json.error ? ' — ' + $json.error.code + ': ' + $json.error.message : '') + '. Completed uploads were kept.' }}"
+      },
+      "id": "1089fb24-38d7-5ada-8010-4897d5956520",
+      "name": "Stop: Job Failed",
+      "type": "n8n-nodes-base.stopAndError",
+      "typeVersion": 1,
+      "position": [
+        5640,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "API Error Type": {
+      "main": [
+        [
+          {
+            "node": "Stop: API Auth Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: Store Not Found",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: Job Creation Conflict",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: Worker Start Failure",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: API Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health": {
+      "main": [
+        [
+          {
+            "node": "Health Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Retry?": {
+      "main": [
+        [
+          {
+            "node": "Health Retry Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health Retry Wait": {
+      "main": [
+        [
+          {
+            "node": "Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Health": {
+      "main": [
+        [
+          {
+            "node": "Health OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Health OK?": {
+      "main": [
+        [
+          {
+            "node": "Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API Error Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Health",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status": {
+      "main": [
+        [
+          {
+            "node": "Store Status Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status Retry?": {
+      "main": [
+        [
+          {
+            "node": "Store Status Retry Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status Retry Wait": {
+      "main": [
+        [
+          {
+            "node": "Store Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Store Status": {
+      "main": [
+        [
+          {
+            "node": "Store Status OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Status OK?": {
+      "main": [
+        [
+          {
+            "node": "Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API Error Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ready?": {
+      "main": [
+        [
+          {
+            "node": "Create Sync Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Not Ready",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Sync Job": {
+      "main": [
+        [
+          {
+            "node": "Create Sync Job Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Sync Job Retry?": {
+      "main": [
+        [
+          {
+            "node": "Create Sync Job Retry Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Create Sync Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Sync Job Retry Wait": {
+      "main": [
+        [
+          {
+            "node": "Create Sync Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Create Sync Job": {
+      "main": [
+        [
+          {
+            "node": "Create Sync Job OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Sync Job OK?": {
+      "main": [
+        [
+          {
+            "node": "Start Worker",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API Error Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Worker": {
+      "main": [
+        [
+          {
+            "node": "Start Worker Retry?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Worker Retry?": {
+      "main": [
+        [
+          {
+            "node": "Start Worker Retry Wait",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Start Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Worker Retry Wait": {
+      "main": [
+        [
+          {
+            "node": "Start Worker",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Start Worker": {
+      "main": [
+        [
+          {
+            "node": "Start Worker OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Worker OK?": {
+      "main": [
+        [
+          {
+            "node": "Poll Job",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API Error Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Job": {
+      "main": [
+        [
+          {
+            "node": "Check Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Job": {
+      "main": [
+        [
+          {
+            "node": "Poll OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll OK?": {
+      "main": [
+        [
+          {
+            "node": "Job Finished?",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "API Error Type",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Finished?": {
+      "main": [
+        [
+          {
+            "node": "Build Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Poll Limit Reached?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Poll Limit Reached?": {
+      "main": [
+        [
+          {
+            "node": "Stop: Poll Timeout",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Wait Before Next Poll",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait Before Next Poll": {
+      "main": [
+        [
+          {
+            "node": "Poll Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Summary": {
+      "main": [
+        [
+          {
+            "node": "Job Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Job Result": {
+      "main": [
+        [
+          {
+            "node": "Sync Completed",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: Job Cancelled",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Stop: Job Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true,
+    "timezone": "Asia/Kolkata"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": false
+  },
+  "tags": []
+}

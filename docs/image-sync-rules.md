@@ -234,3 +234,89 @@ substring rule on normalized titles, so a folder `Roma` also matches "Romano Sof
 Shopify's word-prefix search only returns titles where each word of the folder name
 starts a word of the title. Ambiguous results surface as `multiple_matches` for review;
 they are never resolved automatically.
+
+## 6. Full sync worker (implemented in Prompt 13 — `lib/sync/worker.ts`)
+
+`runSyncJob({ jobId, workspaceId, workerId? }, deps)` runs ONE sync job end to end. It only
+orchestrates the existing services — no second scanner, downloader or uploader:
+
+```
+queued → claim (lease) → running
+  for each connected CATEGORY root          ← cancellation checked first
+    scanCategoryRoots()  (Prompt 12)        Category Root → Code Folder → Product Name Folder → Images
+    for each PRODUCT folder                 ← cancellation checked first
+      record sync_items row (category root, code folder, product folder, match, candidates)
+      no_product_found / multiple_matches  → review (no download, no upload, never picks a product)
+      search_failed                        → failed (job continues; 401 / shop gone → stop, needs reconnect)
+      single_match → for each image         ← cancellation checked before image, download and upload
+        duplicate check (sync_images state) → downloadDriveImage() (Prompt 11) → uploadProductImage() (Prompt 10B)
+→ completed | completed_with_errors | cancelled | failed
+```
+
+**Only the Product Name Folder is matched to Shopify.** The code folder (`SOF-001`), the
+category folder (`Sofa image`), SKUs and filenames are never used for matching. Images
+placed directly in a category root or a code folder are warnings, never products — so a
+test layout like `Sofa image / <code folder> / image.png` produces no product, no download
+and no upload.
+
+### Ownership and isolation
+- The job row decides everything: store, `dry_run`, workspace. The worker receives only
+  `jobId` + the server-side workspace (API key / session) and every DB function re-checks
+  workspace → job (→ store) itself. Wrong workspace → `job_not_found`; a store outside the
+  workspace → `STORE_NOT_FOUND` before anything is scanned.
+- **One worker per job**: `sync_job_claim` / `n8n_start_sync_job` move `queued → running`
+  and store `worker_id` + `heartbeat_at` (lease 15 min). A second claim while the lease is
+  alive → `already_running`; a finished job → `finished`. Every progress write
+  (`sync_job_heartbeat`, `sync_item_*`, `sync_job_finish`) requires the current
+  `worker_id`; a worker that lost its lease stops immediately (`lost_lease`).
+- **Crash recovery**: if the worker dies, its heartbeat stops; after the lease expires the
+  next claim re-claims the job (`reclaimed`) and starts again. Restarting is idempotent:
+  `sync_items` are unique per (job, product folder) and `sync_images` skips what is
+  already uploaded and resumes what is `processing`.
+
+### Duplicates (sync_images rules, unchanged)
+The worker predicts the `sync_image_claim` decision from the existing `sync_images` row
+(`predictImageAction`, same rules as the SQL) so it never downloads an image that won't be
+uploaded; `uploadProductImage()` then makes the authoritative claim.
+
+| sync_images state | action |
+|---|---|
+| uploaded, same checksum (or same modified time when there is no checksum) | skip (no download) |
+| processing (media created in Shopify, not attached yet) | resume (no download) |
+| failed + retryable, attempts < 5 | retry (download + upload) |
+| failed + permanent, or 5 attempts | blocked (skipped, counted in `result.blocked`) |
+| checksum changed / modified time changed without checksum | upload again |
+| same filename, different Drive file ID | separate image, separate upload |
+
+### Errors
+- Temporary errors (Drive 429/5xx/network, Shopify throttled/unavailable) are retried
+  up to 3 times per operation, honouring `Retry-After` (capped at 30 s), else 2 s / 4 s.
+- Permanent file errors (unsupported type, too large, invalid image …) fail that image
+  only: recorded in `sync_images` (`failed`, not retryable) and the job continues →
+  `completed_with_errors`.
+- **Shopify needs reconnect** (401, app uninstalled, shop gone): the uploader / search
+  marks the connection `needs_reconnect`; the worker stops all further Shopify work and
+  finishes the job `failed` with `SHOPIFY_NEEDS_RECONNECT`. Completed uploads are kept.
+- **Google unavailable** after the retries, Google disconnected or root removed: the job
+  finishes `failed` with the Google code; completed work is kept.
+- Anything unexpected → `failed` / `INTERNAL_ERROR` (only the error class name is logged).
+
+### Cancellation
+`POST /sync-jobs/:jobId/cancel` on a running job sets `cancel_requested`. The worker checks
+it before every category root, product folder, image, download and upload (each check is
+also the heartbeat). It then stops starting new work, keeps everything already uploaded and
+finishes `cancelled`. The workflow never cancels a job by itself.
+
+### Progress and result
+Progress is written on every checkpoint: `total` (product folders found), `processed`,
+`uploaded` (images), `skipped` (images), `review` (product folders), `failed`, plus
+`synced`, `warnings`, `errors`. The final `result` (in the job JSON) holds counts,
+`blocked`, up to 100 `review_items` (folder, code folder, outcome, candidates),
+`failed_items` (folder, filename, code) and scan `warnings`. No tokens, URLs or bytes.
+
+### Dry run
+`dry_run=true` performs the Drive scan, Shopify matching and reads image metadata and the
+existing `sync_images` state — and nothing else: **no binary download, no Shopify upload,
+no Drive or Shopify mutation, no `sync_images` write.** (`sync_items` rows are still written
+so the review list exists.) `result.plan` reports what WOULD happen:
+`would_upload`, `skipped`, `blocked`, `review`, `failed`.
