@@ -1,7 +1,7 @@
-# Image sync rules — matching, duplicate protection & Shopify upload
+# Image sync rules — matching, duplicate protection, Shopify upload & Drive download
 
 Rules the image sync follows. Matching: Prompt 5. Duplicate protection and the
-Shopify upload service: Prompt 10B. Drive download and the sync worker come later.
+Shopify upload service: Prompt 10B. Drive download: Prompt 11. The sync worker comes later.
 Source of truth: `PROJECT_SPEC.md` §6–§7.
 
 ## 1. Product matching (implemented)
@@ -134,3 +134,54 @@ sleep/retry by itself — the future worker schedules retries.
 Known edge: if the server stops between `fileCreate` and saving the media ID,
 the next attempt (after the 15-minute lease) uploads again; the first file stays
 unattached in Shopify's Files (never on the product).
+
+## 4. Google Drive download (implemented in Prompt 11 — `lib/google/download.ts`)
+
+`downloadDriveImage({ workspaceId, storeId, fileId }, deps)` — READ-ONLY (GET requests only;
+Drive is never created/changed/moved/deleted). `workspaceId` is the server-side context
+(the sync job's or session's workspace) and is only *compared* with the store's own
+workspace. Root folder, Google account, allowed types and tokens always come from the
+store's stored configuration — never from the caller.
+
+Checks, in order (each failure stops before any download):
+
+1. store exists and belongs to the context workspace → else `STORE_NOT_FOUND`
+2. Google Drive connection is `connected` → else `GOOGLE_DRIVE_NOT_CONNECTED`
+3. a root folder is selected → else `GOOGLE_DRIVE_ROOT_NOT_SELECTED`; the connected
+   account is still the one that selected it → else `GOOGLE_DRIVE_ROOT_NOT_SELECTED`
+4. token via `refreshGoogleToken()` / `getDriveClient()` (stored, encrypted connection only)
+5. root folder exists, is a folder, not trashed → else `DRIVE_ROOT_INACCESSIBLE`
+6. file metadata (`id, name, mimeType, size, md5Checksum, sha256Checksum, modifiedTime,
+   parents, trashed`): exists, readable, not trashed → else `DRIVE_FILE_NOT_FOUND`
+7. type policy = `store_settings.allowed_image_types` (default jpg/jpeg/png/webp): the
+   extension must be allowed AND Drive's MIME type must match it → else `UNSUPPORTED_MIME_TYPE`
+8. size ≤ 20 MB when Drive reports it → else `IMAGE_TOO_LARGE`
+9. **root-folder security**: the file's parents are walked upward (bounded: 25 levels,
+   100 folders) until the store's root is reached. Being readable by the Google account
+   is NOT enough. Not reached → `DRIVE_FILE_OUTSIDE_ROOT`; only reachable through an
+   ignored folder (e.g. `OG`) → `DRIVE_FILE_IN_IGNORED_FOLDER`; trashed folders don't count.
+10. binary: `GET files/{id}?alt=media` with the store's token. The body is streamed and
+    aborted once it passes 20 MB (also if `Content-Length` says so) → `IMAGE_TOO_LARGE`.
+    Redirects are followed manually (max 3), only to `www.googleapis.com` /
+    `*.googleusercontent.com`; the `Authorization` header is only ever sent to
+    `www.googleapis.com`. One forced token refresh on 401.
+11. content: the file's magic bytes must be the same type as its extension/MIME → else
+    `INVALID_IMAGE`; downloaded size must equal Drive's size.
+12. checksums: SHA-256 of the bytes is always computed (local integrity). Drive's
+    `md5Checksum` is returned when Drive has it (source metadata for duplicate/change
+    detection — not a security boundary) and is compared with the bytes, as is Drive's
+    `sha256Checksum` when present; mismatch → `DOWNLOAD_INTEGRITY_FAILED` (retryable).
+
+Result: `{ fileId, filename, mimeType, size, modifiedTime, md5Checksum, sha256, width,
+height, parentFolderId, buffer }`. `buffer` is non-enumerable, so it never appears in
+`JSON.stringify`, spreads or logged objects. Feed `buffer`, `md5Checksum` and
+`modifiedTime` into `uploadProductImage()` (§3).
+
+| Retryable | Permanent |
+|---|---|
+| `GOOGLE_DRIVE_THROTTLED` (429 / rate limit, honours `Retry-After`) | `STORE_NOT_FOUND` |
+| `GOOGLE_DRIVE_UNAVAILABLE` (5xx) | `GOOGLE_DRIVE_NOT_CONNECTED` (also 401 after refresh, missing scope) |
+| `NETWORK_ERROR` (timeout / connection) | `GOOGLE_DRIVE_ROOT_NOT_SELECTED`, `DRIVE_ROOT_INACCESSIBLE` |
+| `TOKEN_REFRESH_UNAVAILABLE` | `DRIVE_FILE_NOT_FOUND`, `DRIVE_FILE_OUTSIDE_ROOT`, `DRIVE_FILE_IN_IGNORED_FOLDER` |
+| `DOWNLOAD_INTEGRITY_FAILED` | `UNSUPPORTED_MIME_TYPE`, `IMAGE_TOO_LARGE`, `INVALID_IMAGE` |
+| `INTERNAL_ERROR` | `PERMISSION_DENIED` (403 on the file, API disabled, unsafe redirect) |

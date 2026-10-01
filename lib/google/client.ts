@@ -6,8 +6,8 @@ import "server-only";
  * - Create it per request/job with an access token from refreshGoogleToken()
  *   (lib/google/connection.ts); never cache globally, never pass to the browser.
  * - Errors never contain the access token or response bodies.
- * - Folder listing, file download and image scanning are NOT implemented here
- *   (Prompt 7 builds them on top of `get()`).
+ * - Folder listing (lib/google/folders.ts) and image download (lib/google/download.ts)
+ *   are built on top of this module.
  */
 
 export const DRIVE_API_BASE = "https://www.googleapis.com/drive/v3";
@@ -39,11 +39,14 @@ const USER_MESSAGES: Record<DriveApiErrorKind, string> = {
 export class DriveApiError extends Error {
   readonly kind: DriveApiErrorKind;
   readonly status?: number;
-  constructor(kind: DriveApiErrorKind, detail: string, status?: number) {
+  /** From Google's Retry-After header (seconds), when sent with 429/503. */
+  readonly retryAfterSeconds?: number;
+  constructor(kind: DriveApiErrorKind, detail: string, status?: number, retryAfterSeconds?: number) {
     super(`Drive API ${kind}: ${detail}`);
     this.name = "DriveApiError";
     this.kind = kind;
     this.status = status;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
   get userMessage() {
     return USER_MESSAGES[this.kind];
@@ -56,6 +59,19 @@ export class DriveApiError extends Error {
 function reasonOf(body: unknown): string {
   const err = (body as { error?: { errors?: { reason?: string }[]; status?: string; details?: { reason?: string }[] } })?.error;
   return [err?.errors?.[0]?.reason, err?.status, err?.details?.find((d) => d.reason)?.reason].filter(Boolean).join(" ");
+}
+
+/** Retry-After in seconds (delta-seconds or HTTP date), or undefined. */
+export function parseRetryAfter(value: string | null, now = Date.now()): number | undefined {
+  if (!value) return undefined;
+  const n = Number(value);
+  if (Number.isFinite(n) && n > 0) return Math.ceil(n);
+  const at = Date.parse(value);
+  return Number.isFinite(at) && at > now ? Math.ceil((at - now) / 1000) : undefined;
+}
+
+export function classifyDriveStatus(status: number, body: unknown): DriveApiErrorKind {
+  return classify(status, body);
 }
 
 function classify(status: number, body: unknown): DriveApiErrorKind {
@@ -113,7 +129,9 @@ export function createDriveClient(options: DriveClientOptions): DriveClient {
     } catch {
       body = null;
     }
-    if (!res.ok) throw new DriveApiError(classify(res.status, body), `HTTP ${res.status}`, res.status);
+    if (!res.ok) {
+      throw new DriveApiError(classify(res.status, body), `HTTP ${res.status}`, res.status, parseRetryAfter(res.headers.get("Retry-After")));
+    }
     if (body === null) throw new DriveApiError("unavailable", "invalid JSON", res.status);
     return body as T;
   }
