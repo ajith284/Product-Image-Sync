@@ -1,7 +1,8 @@
-import { AlertTriangleIcon, CheckCircle2Icon, HardDriveIcon, RefreshCwIcon, type LucideIcon } from "lucide-react";
+import { AlertTriangleIcon, CheckCircle2Icon, RefreshCwIcon, type LucideIcon } from "lucide-react";
 import { notFound } from "next/navigation";
 
 import { PageHeader } from "@/components/shared/page-header";
+import { GoogleDriveCard } from "@/components/stores/google-drive-card";
 import { ProductSearchTest } from "@/components/stores/product-search-test";
 import { ShopifyConnectionCard } from "@/components/stores/shopify-connection-card";
 import { StoreStatusBadge } from "@/components/stores/store-status-badge";
@@ -10,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { getStoreDetails } from "@/lib/data/stores";
+import { GOOGLE_FLOW_MESSAGES, isGoogleFlowErrorCode } from "@/lib/google/errors";
 import { isShopifyFlowErrorCode, SHOPIFY_FLOW_MESSAGES } from "@/lib/shopify/errors";
 import { hasPermission, requireWorkspace } from "@/lib/workspace";
 
@@ -36,7 +38,7 @@ function Placeholder({ icon: Icon, text }: { icon: LucideIcon; text: string }) {
 export default async function StoreDetailsPage({ params, searchParams }: PageProps<"/stores/[id]">) {
   const ctx = await requireWorkspace();
   const [{ id }, query] = await Promise.all([params, searchParams]);
-  const { created, shopify: shopifyResult, shopify_error: shopifyError } = query;
+  const { created, shopify: shopifyResult, shopify_error: shopifyError, google: googleResult, google_error: googleError } = query;
 
   // Store must belong to the CURRENT workspace (and be visible under RLS).
   const details = await getStoreDetails(ctx.workspace.workspaceId, id);
@@ -74,6 +76,24 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
         </Alert>
       ) : null}
 
+      {googleResult === "connected" ? (
+        <Alert>
+          <CheckCircle2Icon />
+          <AlertDescription>Google Drive connected and verified.</AlertDescription>
+        </Alert>
+      ) : googleResult === "connected_unverified" ? (
+        <Alert>
+          <AlertTriangleIcon />
+          <AlertDescription>Google Drive connected, but we couldn&apos;t verify it yet. Use Verify to try again.</AlertDescription>
+        </Alert>
+      ) : null}
+      {isGoogleFlowErrorCode(googleError) ? (
+        <Alert variant="destructive">
+          <AlertTriangleIcon />
+          <AlertDescription>{GOOGLE_FLOW_MESSAGES[googleError]}</AlertDescription>
+        </Alert>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-2">
         <Card className="lg:col-span-2">
           <CardHeader>
@@ -98,26 +118,7 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
           canManage={canManage}
         />
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <HardDriveIcon className="size-4" /> Google Drive
-            </CardTitle>
-            <CardDescription>Where your product image folders live.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {drive ? (
-              <dl className="grid gap-3 sm:grid-cols-2">
-                <Field label="Connection">
-                  <Badge variant="outline">{drive.connection_status}</Badge>
-                </Field>
-                <Field label="Root folder">{drive.root_folder_name ?? "—"}</Field>
-              </dl>
-            ) : (
-              <Placeholder icon={HardDriveIcon} text="Not connected" />
-            )}
-          </CardContent>
-        </Card>
+        <GoogleDriveCard storeId={store.id} connection={drive} canManage={canManage} />
 
         <Card className="lg:col-span-2">
           <CardHeader>

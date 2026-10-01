@@ -7,6 +7,7 @@ import { StoreTable } from "@/components/stores/store-table";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Button } from "@/components/ui/button";
 import { listStores } from "@/lib/data/stores";
+import { GOOGLE_FLOW_MESSAGES, isGoogleFlowErrorCode } from "@/lib/google/errors";
 import { isShopifyFlowErrorCode, SHOPIFY_FLOW_MESSAGES } from "@/lib/shopify/errors";
 import { hasPermission, requireWorkspace } from "@/lib/workspace";
 
@@ -14,7 +15,7 @@ export const metadata = { title: "Stores" };
 
 export default async function StoresPage({ searchParams }: PageProps<"/stores">) {
   const ctx = await requireWorkspace();
-  const { shopify_error: shopifyError } = await searchParams;
+  const { shopify_error: shopifyError, google_error: googleError } = await searchParams;
   const stores = await listStores(ctx.workspace.workspaceId);
   const canAdd = hasPermission(ctx, "manageStores");
 
@@ -38,6 +39,12 @@ export default async function StoresPage({ searchParams }: PageProps<"/stores">)
         <Alert variant="destructive">
           <AlertTriangleIcon />
           <AlertDescription>{SHOPIFY_FLOW_MESSAGES[shopifyError]}</AlertDescription>
+        </Alert>
+      ) : null}
+      {isGoogleFlowErrorCode(googleError) ? (
+        <Alert variant="destructive">
+          <AlertTriangleIcon />
+          <AlertDescription>{GOOGLE_FLOW_MESSAGES[googleError]}</AlertDescription>
         </Alert>
       ) : null}
       {stores.length === 0 ? (

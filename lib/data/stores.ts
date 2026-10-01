@@ -83,7 +83,7 @@ export async function getStoreDetails(workspaceId: string, storeId: string) {
       .maybeSingle(),
     supabase
       .from("google_drive_connections")
-      .select("connection_status, google_account_email, root_folder_name, connected_at")
+      .select("connection_status, google_account_email, root_folder_name, connected_at, last_verified_at, last_error, disconnected_at")
       .eq("store_id", storeId)
       .maybeSingle(),
     supabase

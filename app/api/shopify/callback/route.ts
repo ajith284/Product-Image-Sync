@@ -1,5 +1,6 @@
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
+import { appRedirect } from "@/lib/app-url";
 import { getSessionUser } from "@/lib/auth";
 import { handleCallback } from "@/lib/shopify/auth";
 import { getShopifyDeps, logShopifyError, toFlowError } from "@/lib/shopify/runtime";
@@ -13,12 +14,8 @@ export const dynamic = "force-dynamic";
  */
 export async function GET(request: NextRequest) {
   const user = await getSessionUser();
-  const back = (path: string) => {
-    const res = NextResponse.redirect(new URL(path, request.nextUrl.origin));
-    res.headers.set("Cache-Control", "no-store");
-    res.headers.set("Referrer-Policy", "no-referrer");
-    return res;
-  };
+  // Absolute URL from configuration only (never from Host / X-Forwarded-* headers).
+  const back = (path: string) => appRedirect(path, [{ name: "SHOPIFY_APP_URL", value: process.env.SHOPIFY_APP_URL }]);
 
   try {
     const result = await handleCallback(

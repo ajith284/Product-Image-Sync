@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, timingSafeEqual } from "node:crypto";
 
 import { getShopifyConfig } from "@/lib/shopify/config";
 import type { ShopDomain, ShopifyConfig } from "@/lib/shopify/types";
@@ -21,17 +21,7 @@ import type { ShopDomain, ShopifyConfig } from "@/lib/shopify/types";
  *                          metadata → shopify_connections; store.status = connected.
  */
 
-export const OAUTH_STATE_TTL_SECONDS = 10 * 60;
-
-/** Random, URL-safe state for CSRF protection. Only its hash is stored. */
-export function createOAuthState(): { state: string; stateHash: string } {
-  const state = randomBytes(32).toString("base64url");
-  return { state, stateHash: hashOAuthState(state) };
-}
-
-export function hashOAuthState(state: string): string {
-  return createHash("sha256").update(state, "utf8").digest("hex");
-}
+export { createOAuthState, hashOAuthState, OAUTH_STATE_TTL_SECONDS } from "@/lib/security/oauth-state";
 
 /**
  * https://{shop}/admin/oauth/authorize?client_id&scope&redirect_uri&state

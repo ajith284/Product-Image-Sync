@@ -65,38 +65,56 @@ export type Database = {
       google_drive_connections: {
         Row: {
           connected_at: string | null
+          connected_by: string | null
           connection_status: string
           created_at: string
+          disconnected_at: string | null
           google_account_email: string | null
+          google_account_id: string | null
+          granted_scopes: Json
           id: string
+          last_error: string | null
           last_verified_at: string | null
           root_folder_id: string | null
           root_folder_name: string | null
           store_id: string
+          token_expires_at: string | null
           updated_at: string
         }
         Insert: {
           connected_at?: string | null
+          connected_by?: string | null
           connection_status?: string
           created_at?: string
+          disconnected_at?: string | null
           google_account_email?: string | null
+          google_account_id?: string | null
+          granted_scopes?: Json
           id?: string
+          last_error?: string | null
           last_verified_at?: string | null
           root_folder_id?: string | null
           root_folder_name?: string | null
           store_id: string
+          token_expires_at?: string | null
           updated_at?: string
         }
         Update: {
           connected_at?: string | null
+          connected_by?: string | null
           connection_status?: string
           created_at?: string
+          disconnected_at?: string | null
           google_account_email?: string | null
+          google_account_id?: string | null
+          granted_scopes?: Json
           id?: string
+          last_error?: string | null
           last_verified_at?: string | null
           root_folder_id?: string | null
           root_folder_name?: string | null
           store_id?: string
+          token_expires_at?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -645,6 +663,77 @@ export type Database = {
         }
       }
       // Service-role-only RPCs (migration 20260930110157_shopify_oauth). Nullable args hand-annotated.
+      google_begin_oauth: {
+        Args: {
+          p_state_hash: string
+          p_store_id: string
+          p_ttl_seconds?: number
+          p_user_id: string
+        }
+        Returns: string
+      }
+      google_consume_oauth_state: {
+        Args: { p_state_hash: string }
+        Returns: {
+          status: string
+          store_id: string
+          user_id: string
+          workspace_id: string
+        }[]
+      }
+      google_disconnect: {
+        Args: { p_store_id: string; p_user_id: string }
+        Returns: boolean
+      }
+      google_get_credentials: {
+        Args: { p_store_id: string }
+        Returns: {
+          account_shared: boolean
+          connection_id: string
+          connection_status: string
+          encrypted_access_token: string
+          encrypted_refresh_token: string
+          google_account_id: string
+          token_expires_at: string
+          token_version: number
+          workspace_id: string
+        }[]
+      }
+      google_record_verification: {
+        Args: {
+          p_account_email?: string
+          p_error?: string
+          p_failure_status?: string
+          p_log?: boolean
+          p_ok: boolean
+          p_store_id: string
+        }
+        Returns: undefined
+      }
+      google_save_connection: {
+        Args: {
+          p_access_expires_at: string
+          p_encrypted_access_token: string
+          p_encrypted_refresh_token: string
+          p_google_account_email: string
+          p_google_account_id: string
+          p_scopes: string
+          p_store_id: string
+          p_user_id: string
+          p_workspace_id: string
+        }
+        Returns: string
+      }
+      google_store_refreshed_tokens: {
+        Args: {
+          p_access_expires_at: string
+          p_connection_id: string
+          p_encrypted_access_token: string
+          p_encrypted_refresh_token: string
+          p_expected_version: number
+        }
+        Returns: boolean
+      }
       shopify_begin_oauth: {
         Args: { p_state_hash: string; p_store_id: string; p_ttl_seconds?: number; p_user_id: string }
         Returns: string

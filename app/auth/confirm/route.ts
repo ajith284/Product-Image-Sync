@@ -1,6 +1,7 @@
 import type { EmailOtpType } from "@supabase/supabase-js";
-import { NextResponse, type NextRequest } from "next/server";
+import type { NextRequest } from "next/server";
 
+import { appRedirect } from "@/lib/app-url";
 import { safeNextPath } from "@/lib/routes";
 import { createClient } from "@/lib/supabase/server";
 
@@ -9,7 +10,7 @@ import { createClient } from "@/lib/supabase/server";
  * Supports both the PKCE `code` flow (default templates) and `token_hash` templates.
  */
 export async function GET(request: NextRequest) {
-  const { searchParams, origin } = request.nextUrl;
+  const { searchParams } = request.nextUrl;
   const code = searchParams.get("code");
   const tokenHash = searchParams.get("token_hash");
   const type = searchParams.get("type") as EmailOtpType | null;
@@ -26,5 +27,6 @@ export async function GET(request: NextRequest) {
     ok = !error;
   }
 
-  return NextResponse.redirect(new URL(ok ? next : "/auth/error", origin));
+  // Configured site URL only (behind a tunnel request.nextUrl.origin is https://localhost:3000).
+  return appRedirect(ok ? next : "/auth/error");
 }
