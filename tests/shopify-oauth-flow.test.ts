@@ -300,7 +300,17 @@ describe("webhooks", () => {
     expect(r).toEqual({ status: 200, outcome: "duplicate" });
   });
 
-  it.each(["customers/data_request", "customers/redact", "shop/redact"])("compliance topic %s → 200", async (topic) => {
+  it("shop/redact → 200 via the erase function (Prompt 14F)", async () => {
+    const { repo } = fakeRepo();
+    const r = await handleShopifyWebhook(
+      { rawBody: body, headers: headers({ "x-shopify-topic": "shop/redact", "x-shopify-hmac-sha256": sign(body) }) },
+      { clientSecret: config.clientSecret, repo },
+    );
+    expect(r).toEqual({ status: 200, outcome: "shop_redact:redacted" });
+    expect(repo.handleShopRedact).toHaveBeenCalledWith("wh-1", SHOP);
+  });
+
+  it.each(["customers/data_request", "customers/redact"])("compliance topic %s → 200", async (topic) => {
     const { repo } = fakeRepo();
     const r = await handleShopifyWebhook(
       { rawBody: body, headers: headers({ "x-shopify-topic": topic, "x-shopify-hmac-sha256": sign(body) }) },

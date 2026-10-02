@@ -60,6 +60,8 @@ export interface ShopifyRepository {
   }): Promise<void>;
   disconnect(storeId: string, userId: string): Promise<boolean>;
   handleAppUninstalled(webhookId: string, shopDomain: string): Promise<string>;
+  /** Mandatory shop/redact: erase this shop's Shopify data (Prompt 14F). Idempotent per webhook id. */
+  handleShopRedact(webhookId: string, shopDomain: string): Promise<string>;
   recordWebhook(webhookId: string, topic: string, shopDomain: string | null): Promise<boolean>;
 }
 
@@ -171,6 +173,15 @@ export function createShopifyRepository(): ShopifyRepository {
 
     async handleAppUninstalled(webhookId, shopDomain) {
       const { data, error } = await db.rpc("shopify_handle_app_uninstalled", {
+        p_webhook_id: webhookId,
+        p_shop_domain: shopDomain,
+      });
+      if (error) mapError(error, "unknown");
+      return data ?? "unknown";
+    },
+
+    async handleShopRedact(webhookId, shopDomain) {
+      const { data, error } = await db.rpc("shopify_handle_shop_redact", {
         p_webhook_id: webhookId,
         p_shop_domain: shopDomain,
       });

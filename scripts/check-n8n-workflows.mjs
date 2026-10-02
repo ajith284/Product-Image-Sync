@@ -12,6 +12,8 @@ import { fileURLToPath } from "node:url";
 const root = path.dirname(path.dirname(fileURLToPath(import.meta.url)));
 const STORE = "7bb362f0-ce91-4b0b-a81b-373d49f2b242";
 const JOB = "11111111-2222-4333-8444-555555555555";
+/** A job left active by an earlier run (its worker may be dead) — stale-job recovery scenarios. */
+const ACTIVE = "99999999-0000-4000-8000-000000000000";
 let failures = 0;
 const fail = (msg) => {
   failures++;
@@ -206,10 +208,11 @@ function validate(file, expect) {
 function mockApi(scenario, dryRun) {
   const calls = [];
   const counts = {};
+  const recovering = scenario.startsWith("active409") && scenario !== "active409noid";
   const job = {
-    job_id: JOB,
+    job_id: recovering ? ACTIVE : JOB,
     store_id: STORE,
-    status: "queued",
+    status: recovering ? (scenario === "active409finished" ? "completed" : "running") : "queued",
     trigger_source: null,
     dry_run: dryRun,
     cancel_requested: false,
@@ -244,7 +247,7 @@ function mockApi(scenario, dryRun) {
     });
   const handle = (req) => {
     const p = new URL(req.url).pathname.replace("/api/n8n/v1", "");
-    const key = `${req.method} ${p.replace(JOB, ":id")}`;
+    const key = `${req.method} ${p.replace(JOB, ":id").replace(ACTIVE, ":active")}`;
     counts[key] = (counts[key] ?? 0) + 1;
     calls.push({ ...req, key });
     const n = counts[key];
@@ -274,10 +277,13 @@ function mockApi(scenario, dryRun) {
       });
     }
     if (p === "/sync-jobs" && req.method === "POST") {
-      if (scenario === "active409")
-        return err(409, "SYNC_JOB_ALREADY_ACTIVE", {
-          active_job_id: "99999999-0000-4000-8000-000000000000",
-        });
+      if (scenario.startsWith("active409"))
+        return err(
+          409,
+          "SYNC_JOB_ALREADY_ACTIVE",
+          scenario === "active409noid" ? {} : { active_job_id: ACTIVE },
+        );
+      if (scenario === "idem409") return err(409, "IDEMPOTENCY_CONFLICT");
       const b = JSON.parse(req.body);
       if (
         Object.keys(b).sort().join() !== "dry_run,store_id,trigger_source" ||
@@ -294,6 +300,15 @@ function mockApi(scenario, dryRun) {
         "idempotent-replayed": String(replay),
       });
     }
+    if (recovering && p === `/sync-jobs/${ACTIVE}/run` && req.method === "POST") {
+      if (scenario === "active409stale") {
+        job.started_at = "2026-10-02T01:00:00Z";
+        return res(202, { ...job, claimed: true, reason: "reclaimed" });
+      }
+      if (scenario === "active409finished")
+        return res(200, { ...job, claimed: false, reason: "finished" });
+      return res(200, { ...job, claimed: false, reason: "already_running" });
+    }
     if (p === `/sync-jobs/${JOB}/run` && req.method === "POST") {
       if (scenario === "start500") return err(500, "INTERNAL_ERROR");
       if (scenario === "start404") return err(404, "JOB_NOT_FOUND");
@@ -303,7 +318,8 @@ function mockApi(scenario, dryRun) {
       job.started_at = "2026-10-02T02:00:01Z";
       return res(202, { ...job, claimed: true, reason: "claimed" });
     }
-    if (p === `/sync-jobs/${JOB}` && req.method === "GET") {
+    if (p === `/sync-jobs/${job.job_id}` && req.method === "GET") {
+      if (scenario === "active409finished") return res(200, { ...job, completed_at: "2026-10-02T01:30:00Z" });
       if (scenario === "poll503" && n === 2)
         return res(503, "unavailable", { "retry-after": "45" });
       if (scenario === "pollTimeout") return res(200, job);
@@ -652,12 +668,58 @@ function scenarios(file, wf, edges, dryRun) {
     r401.api.counts[`GET /stores/${STORE}/status`] === 1,
   );
   expectStop("store404", "Stop: Store Not Found", /HTTP 404 STORE_NOT_FOUND/);
-  const r409 = expectStop(
-    "active409",
-    "Stop: Job Creation Conflict",
-    /HTTP 409 SYNC_JOB_ALREADY_ACTIVE.*active job 99999999/,
-  );
-  check("409 never retried", r409.api.counts["POST /sync-jobs"] === 1);
+  if (dryRun) {
+    // The dry-run TEST workflow must never start someone else's (possibly real) job.
+    const r409 = expectStop(
+      "active409",
+      "Stop: Job Creation Conflict",
+      /HTTP 409 SYNC_JOB_ALREADY_ACTIVE.*active job 99999999/,
+    );
+    check("409 never retried", r409.api.counts["POST /sync-jobs"] === 1);
+    check(
+      "dry-run test never calls /run on another active job",
+      !r409.api.calls.some((c) => c.key.includes("/run")),
+    );
+  } else {
+    for (const [scen, reason] of [
+      ["active409", "already_running"],
+      ["active409stale", "reclaimed"],
+      ["active409finished", "finished"],
+    ]) {
+      const r = sim(scen);
+      const runs = r.api.calls.filter((c) => c.key.endsWith("/run"));
+      check(
+        `stale-job recovery (${scen}): 409 + active_job_id → POST /run on THAT job (${reason}) → poll → Sync Completed`,
+        r.visited.at(-1) === "Sync Completed" &&
+          runs.length === 1 &&
+          runs[0].key === "POST /sync-jobs/:active/run" &&
+          r.summary.job_id === ACTIVE &&
+          r.summary.recovered_active_job === true,
+        `${r.stop ?? r.visited.at(-1)} ${JSON.stringify(r.summary ?? {})}`,
+      );
+      check(
+        `stale-job recovery (${scen}): exactly one create attempt, no second job, never cancels`,
+        r.api.counts["POST /sync-jobs"] === 1 &&
+          !r.api.calls.some((c) => c.key.endsWith("/cancel")),
+      );
+    }
+    const happy = sim("happy");
+    check(
+      "a normal run reports recovered_active_job=false",
+      happy.summary.recovered_active_job === false,
+    );
+  }
+  for (const [scen, re] of [
+    ["active409noid", /HTTP 409 SYNC_JOB_ALREADY_ACTIVE/],
+    ["idem409", /HTTP 409 IDEMPOTENCY_CONFLICT/],
+  ]) {
+    const r = expectStop(scen, "Stop: Job Creation Conflict", re);
+    check(
+      `${scen}: no /run call, create not retried`,
+      !r.api.calls.some((c) => c.key.includes("/run")) &&
+        r.api.counts["POST /sync-jobs"] === 1,
+    );
+  }
   expectStop(
     "start500",
     "Stop: Worker Start Failure",

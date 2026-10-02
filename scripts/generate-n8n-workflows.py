@@ -18,6 +18,12 @@ Every API call: <HTTP> (full response, never throws, continues on network errors
       true  → <Step> Retry Wait (Retry-After, else 2^n s; clamped 1–60 s) → back to <HTTP>
       false → Check <Step> (normalises: ok, http_status, code, message, request_id)
   → <Step> OK? — false → API Error Type (Switch) → the matching Stop node.
+Stale-job recovery (production only, Prompt 14E): when create returns 409
+SYNC_JOB_ALREADY_ACTIVE with an active_job_id, that job becomes this run's job and goes
+through the normal Start Worker → poll path. POST /run stays authoritative: live lease →
+already_running (just wait), stale lease → reclaimed, finished → nothing re-run. No second
+job is ever created. The dry-run TEST workflow still stops on a conflict (it must never
+start a queued real sync).
 401/403/404/409/422 are never retried. Polling: transient poll errors count as "not
 finished yet"; the loop is bounded by Config.maxPolls and Config.maxPollMinutes.
 
@@ -141,6 +147,26 @@ if (!status) return failure('NETWORK_ERROR', 'The Product Image Sync API could n
 """
 
 
+# Production only: a still-active job (409 + active_job_id) is resumed via /run instead of
+# stopping the run. Only this exact error qualifies; IDEMPOTENCY_CONFLICT etc. still stop.
+RECOVER_ACTIVE = """
+if (status === 409 && err.code === 'SYNC_JOB_ALREADY_ACTIVE'
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(String(err.active_job_id || ''))) {
+  return [{ json: {
+    ok: true,
+    recovered: true,
+    job_id: String(err.active_job_id).toLowerCase(),
+    store_id: $('Config').first().json.storeId,
+    status: 'active',
+    dry_run: null,
+    trigger_source: null,
+    replayed: false,
+    request_id: safe(err.request_id || headers['x-request-id'], 100),
+  } }];
+}
+"""
+
+
 def check_js(step, tail):
     return CHECK_HEAD.replace("STEP", json.dumps(step)) + tail
 
@@ -191,8 +217,10 @@ def build(mode):
             "## Schedule (conservative default)\n"
             "Once a day at **02:00 Asia/Kolkata** (workflow timezone setting).\n\n"
             "The workflow is imported **inactive** — the schedule does nothing until you activate it. "
-            "Only one job per store can be active: a run that starts while a job is still active stops at "
-            "**Stop: Job Creation Conflict** (409) and changes nothing."
+            "Only one job per store can be active. If a job is still active when this runs (409), the workflow "
+            "does NOT create another one: it calls **/run** on that job instead — a live worker → it just waits "
+            "for that job; a dead worker (stale lease, 15 min) → the job is reclaimed and resumed without "
+            "duplicate uploads. The summary then shows `recovered_active_job: true`."
         ), [-460, 260], 420, 260, 6)
 
     # ---- triggers + config ---------------------------------------------------
@@ -283,7 +311,7 @@ return [{ json: {
             ("X-Request-ID", f"=n8n-{{{{ $execution.id }}}}-{tag}"),
         ),
         json_body=f"={{{{ JSON.stringify({{ store_id: {CFG}.storeId, trigger_source: {CFG}.triggerSource, dry_run: {CFG}.dryRun }}) }}}}",
-        check_tail=f"""
+        check_tail=(RECOVER_ACTIVE if prod else "") + f"""
 if (status !== 201 && status !== 200) return failure('CREATE_FAILED', 'The sync job could not be created.');
 if (body.dry_run !== {'false' if prod else 'true'}) return failure('UNEXPECTED_MODE', 'The created job has the wrong dry_run mode.');
 return [{{ json: {{
@@ -294,6 +322,7 @@ return [{{ json: {{
   dry_run: body.dry_run,
   trigger_source: body.trigger_source,
   replayed: String(headers['idempotent-replayed'] || '') === 'true',
+  recovered: false,
 }} }}];
 """,
     )
@@ -408,6 +437,7 @@ return [{ json: {
   cancelled_at: j.cancelled_at,
   error: err,
   polls: $input.first().json.poll ?? null,
+  recovered_active_job: $('Check Create Sync Job').first().json.recovered === true,
 } }];
 """, [5140, -200])
     wf.switch("Job Result", [

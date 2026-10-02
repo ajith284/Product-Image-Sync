@@ -1031,6 +1031,10 @@ export type Database = {
         Args: { p_shop_domain: string; p_webhook_id: string }
         Returns: string
       }
+      shopify_handle_shop_redact: {
+        Args: { p_shop_domain: string; p_webhook_id: string }
+        Returns: string
+      }
       shopify_record_verification: {
         Args: {
           p_error?: string | null

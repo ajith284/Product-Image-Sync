@@ -58,11 +58,13 @@ export function fakeN8n() {
     return k;
   }
 
+  // Mirrors private.n8n_job_json(): no workspace, idempotency or worker-lease internals.
   const view = (j: Job): JobJson => {
-    const { workspace_id: _w, idempotency_key: _i, request_hash: _h, ...rest } = j;
+    const { workspace_id: _w, idempotency_key: _i, request_hash: _h, worker_id: _wk, ...rest } = j as Job & { worker_id?: string };
     void _w;
     void _i;
     void _h;
+    void _wk;
     return { ...rest };
   };
 
@@ -155,7 +157,8 @@ export function fakeN8n() {
       const k = check(keyId, "n8n:jobs", null);
       const j = jobs.find((x) => x.job_id === jobId && x.workspace_id === k.workspaceId && (!k.storeId || x.store_id === k.storeId));
       if (!j) throw new N8nApiError("JOB_NOT_FOUND");
-      if (j.status === "cancelled") return { job: view(j), changed: false };
+      // Mirrors n8n_cancel_sync_job: already cancelled, or running with cancel already requested → no change.
+      if (j.status === "cancelled" || (j.status === "running" && j.cancel_requested)) return { job: view(j), changed: false };
       if (!["queued", "running"].includes(j.status)) throw new N8nApiError("JOB_NOT_CANCELLABLE");
       if (j.status === "queued") {
         j.status = "cancelled";

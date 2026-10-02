@@ -85,6 +85,10 @@ const MAX_IMAGE_ATTEMPTS = 5;
 /** Errors that stop the whole job (completed work is kept). */
 const STOP_CODES = new Set([
   "STORE_NOT_FOUND",
+  // The category root itself was un-shared / trashed: a store-level problem. Stop instead of
+  // marking every remaining image as a permanent failure (they would stay blocked after the
+  // folder is shared again, because their checksums don't change). — Prompt 14E
+  "DRIVE_ROOT_INACCESSIBLE",
   "GOOGLE_DRIVE_NOT_CONNECTED",
   "GOOGLE_DRIVE_ROOT_NOT_SELECTED",
   "CATEGORY_ROOT_NOT_CONNECTED",
@@ -100,6 +104,15 @@ const STOP_CODES = new Set([
   "SHOPIFY_THROTTLED",
   "SHOPIFY_UNAVAILABLE",
 ]);
+
+/** Logging must never stop the worker from finishing the job (e.g. a closed stdout). */
+function safeLog(line: string) {
+  try {
+    console.error(line);
+  } catch {
+    // ignore
+  }
+}
 
 class StopJob extends Error {
   constructor(
@@ -594,9 +607,7 @@ export async function runSyncJob(
       return finish("failed", error.code, error.publicMessage);
     }
     progress.errors += 1;
-    console.error(
-      `[sync-worker] unexpected ${error instanceof Error ? error.name : "error"}`,
-    );
+    safeLog(`[sync-worker] unexpected ${error instanceof Error ? error.name : "error"}`);
     try {
       return await finish(
         "failed",

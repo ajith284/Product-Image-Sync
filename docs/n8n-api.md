@@ -37,7 +37,7 @@ Authorization is resolved **server-side from the key**: key → workspace → op
 | Header | Required | Notes |
 |---|---|---|
 | `Authorization: Bearer <secret>` | yes, except `/health` | Browser cookies are ignored. |
-| `Content-Type: application/json` | for bodies | Max body 16 KB. |
+| `Content-Type: application/json` | for bodies | Max body 16 KB — enforced on the declared `Content-Length` **and** on the bytes actually streamed (missing / chunked / understated lengths are bounded too); larger → `413`, malformed `Content-Length` or a broken upload → `400 BAD_REQUEST`. Checked before authentication. |
 | `Idempotency-Key` | **yes** for `POST /sync-jobs` | 1–200 chars: `A-Z a-z 0-9 . _ : -`. In n8n: `n8n-{{ $execution.id }}-create`. |
 | `X-Request-ID` | optional; required when signing | 8–100 chars: `A-Z a-z 0-9 . _ : -`. Echoed back; generated if missing. |
 | `X-PIS-Timestamp`, `X-PIS-Signature` | optional | Request signing, section 4. |
@@ -179,6 +179,13 @@ Cancelling again returns `200` with `"changed": false`. Finished jobs return `40
 
 Signing proves the body/path were not altered and blocks replays. Unsigned requests are accepted unless the server sets `N8N_API_REQUIRE_SIGNATURE=true`.
 
+**Production decision (Prompt 14F): Bearer-only for the n8n workflows; signing stays optional.**
+- The signing key is SHA-256 of the API secret, so anyone who holds the Bearer token can also sign — signing adds no protection against a stolen token.
+- Every write endpoint is replay-safe without signatures: `POST /sync-jobs` replays return the same job (Idempotency-Key), `/run` replays return `already_running` / `finished`, cancel replays return `changed: false` (all covered by tests).
+- Requiring signatures server-wide would break the existing "Product Image Sync — API Test" workflow (`5uS72dDfrLYKZd1j`), which must not be modified.
+- n8n *can* sign (Crypto node, HMAC-SHA256 with the secret in a Crypto credential), so a client that needs body/path integrity on top of TLS can opt in; if a deployment ever needs signatures for everyone, set `N8N_API_REQUIRE_SIGNATURE=true` after updating every workflow to sign each attempt with a fresh `X-Request-ID`.
+- Residual risk: anyone who can read a full request (e.g. a TLS-terminating proxy's request inspector) has the token and can replay or forge requests — mitigate with store-restricted keys, prompt revocation, and a production host without request inspection.
+
 Headers: `X-PIS-Timestamp` (Unix seconds, ±300 s), `X-Request-ID` (unique per request; used as the nonce and remembered for 10 minutes), `X-PIS-Signature`.
 
 ```text
@@ -233,6 +240,8 @@ No stack traces, database errors, or credentials are ever returned.
 | Per workspace (all keys) | 600 / min |
 | Failed authentication per client IP | 20 / min |
 
+**Client IP for the failed-auth limit (Prompt 14D):** the right-most `X-Forwarded-For` entry, i.e. the address written by the nearest trusted proxy (`N8N_TRUSTED_PROXY_HOPS`, default `1`; e.g. `2` for CDN → ngrok → app). ngrok *appends* the client IP to whatever the caller sent (its docs say to use the last value); Vercel overwrites the header. Entries to the left are caller-controlled and ignored — previously the first entry was used, which let a caller reset the limit on every request. `X-Real-IP` is ignored; no header → one shared bucket.
+
 On `429`, wait `Retry-After` seconds. The provided workflows retry 429/502/503/504 themselves (bounded). In your own workflows, do not use a blanket **Retry On Fail** because it would also retry 401/403/404/409/422, which will not succeed on retry.
 
 ## 7. Retries & idempotency
@@ -275,7 +284,7 @@ Any API error → API Error Type → Stop: API Auth Failure (401/403) | Store No
 - **Polling**: `GET /sync-jobs/{jobId}` every 30 s (or `Retry-After`, 5–300 s) until `completed`, `completed_with_errors`, `failed`, or `cancelled`; transient poll errors just poll again. Bounded by 240 polls / 120 minutes → **Stop: Poll Timeout**. The job keeps running on the server; it is **not** cancelled.
 - **Summary**: `store_id, job_id, status, trigger_source, dry_run, progress, counts, review_items, failed_items, started_at, completed_at, cancelled_at, error, polls`.
 - Error messages contain HTTP status, safe error code, safe message, and `request_id` only.
-- Only one job per store can be active. A schedule that fires while a job runs stops at **Job Creation Conflict** with the active job ID.
+- Only one job per store can be active. **Stale-job recovery (Prompt 14E):** if create returns `409 SYNC_JOB_ALREADY_ACTIVE` with an `active_job_id`, the production workflow does not create another job and does not stop: it calls `POST /sync-jobs/{active_job_id}/run` and polls that job. `/run` decides — live lease → `already_running` (it just waits), stale lease (the worker died; 15 min) → `reclaimed` and resumed without duplicate uploads, finished → `finished`. The summary shows `recovered_active_job: true`. A 409 without `active_job_id`, or `IDEMPOTENCY_CONFLICT`, still stops at **Job Creation Conflict**. The dry-run test workflow never recovers (it must not start a queued real sync).
 
 ### Dry run test — `docs/n8n/product-image-sync-dry-run-test.workflow.json`
 

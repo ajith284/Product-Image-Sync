@@ -300,6 +300,14 @@ uploaded; `uploadProductImage()` then makes the authoritative claim.
 - **Google unavailable** after the retries, Google disconnected or root removed: the job
   finishes `failed` with the Google code; completed work is kept.
 - Anything unexpected → `failed` / `INTERNAL_ERROR` (only the error class name is logged).
+- **Category root un-shared / trashed mid-run** (`DRIVE_ROOT_INACCESSIBLE`): the job stops
+  (`failed`) instead of marking every remaining image as a permanent failure — those images
+  would otherwise stay blocked after the folder is shared again (Prompt 14E).
+- **Database failures** while writing progress, items or the ledger → `failed` /
+  `INTERNAL_ERROR`, completed uploads are kept. If even `finish()` fails, the job stays
+  `running`; its lease expires after 15 min and the next `/run` reclaims it without
+  re-uploading (the ledger skips what is already uploaded). A failing logger can never stop
+  the worker from finishing the job.
 
 ### Cancellation
 `POST /sync-jobs/:jobId/cancel` on a running job sets `cancel_requested`. The worker checks

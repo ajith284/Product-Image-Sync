@@ -18,14 +18,19 @@ export function launchSyncWorker(input: {
   after(async () => {
     try {
       const result = await runSyncJob(input, getWorkerDeps());
-      console.info(
-        `[sync-worker] job ${input.jobId} finished: ${result.status}`,
-      );
+      log("info", `[sync-worker] job ${input.jobId} finished: ${result.status}`);
     } catch (error) {
       // Codes/class names only — never tokens or payloads.
-      console.error(
-        `[sync-worker] job ${input.jobId} crashed: ${error instanceof Error ? error.name : "error"}`,
-      );
+      log("error", `[sync-worker] job ${input.jobId} crashed: ${error instanceof Error ? error.name : "error"}`);
     }
   });
+}
+
+/** A failing logger must never turn into an unhandled rejection inside after(). */
+function log(level: "info" | "error", line: string) {
+  try {
+    console[level](line);
+  } catch {
+    // ignore
+  }
 }

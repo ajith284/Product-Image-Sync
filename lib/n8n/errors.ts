@@ -25,6 +25,7 @@ export const N8N_API_ERRORS = {
   PAYLOAD_TOO_LARGE: { status: 413, message: "The request body is too large." },
   UNSUPPORTED_MEDIA_TYPE: { status: 415, message: "Send the request body as application/json." },
   INVALID_JSON: { status: 400, message: "The request body isn't valid JSON." },
+  BAD_REQUEST: { status: 400, message: "The request body could not be read." },
   INVALID_REQUEST: { status: 422, message: "The request is invalid." },
   IDEMPOTENCY_KEY_REQUIRED: { status: 422, message: "An Idempotency-Key header is required for this request." },
   RATE_LIMITED: { status: 429, message: "Too many requests. Retry after the time in the Retry-After header." },

@@ -82,6 +82,7 @@ export function fakeRepo(overrides: Partial<ShopifyRepository> = {}) {
     }),
     disconnect: vi.fn(async () => true),
     handleAppUninstalled: vi.fn(async () => "disconnected"),
+    handleShopRedact: vi.fn(async () => "redacted"),
     recordWebhook: vi.fn(async () => true),
     ...overrides,
   };

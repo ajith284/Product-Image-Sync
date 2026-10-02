@@ -1,9 +1,11 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
+import { isIP } from "node:net";
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { readLimitedBody } from "@/lib/http/limited-body";
 import { N8nApiError, type N8nErrorCode } from "@/lib/n8n/errors";
 import { canonicalString, parseApiToken, safeEqualHex, sha256Hex, verifySignature, type ApiScope } from "@/lib/n8n/keys";
 import type { N8nRepository, StoredApiKey } from "@/lib/n8n/repository";
@@ -39,8 +41,30 @@ export type N8nResult = { status?: number; body: unknown; headers?: Record<strin
 
 type Options = { scope: ApiScope; rate: "read" | "write" };
 
-function clientIp(request: NextRequest) {
-  return request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || request.headers.get("x-real-ip") || "unknown";
+/**
+ * Client IP for the failed-auth throttle (Prompt 14D).
+ *
+ * Trust boundary: the app is reached through N8N_TRUSTED_PROXY_HOPS proxies (default 1)
+ * that APPEND the connecting client's address to X-Forwarded-For — ngrok appends (its
+ * docs: "use the last value of the header"); Vercel overwrites the header with the client
+ * IP, so the last value is also correct there. Entries further left were written by the
+ * caller and are ignored: using the first entry let an attacker reset the throttle on
+ * every request. X-Real-IP is ignored for the same reason (client-settable unless a proxy
+ * sets it). No header → one shared "direct" bucket. Values are validated as IPs so a
+ * header can't create arbitrary bucket keys.
+ */
+export function clientIp(headers: Headers): string {
+  const hops = Math.min(Math.max(Number.parseInt(process.env.N8N_TRUSTED_PROXY_HOPS ?? "1", 10) || 1, 1), 10);
+  const parts = (headers.get("x-forwarded-for") ?? "")
+    .split(",")
+    .map((v) => v.trim())
+    .filter(Boolean);
+  if (!parts.length) return "direct";
+  let ip = parts[Math.max(0, parts.length - hops)]!;
+  const bracketed = /^\[([^\]]+)\](?::\d+)?$/.exec(ip); // [IPv6]:port
+  if (bracketed) ip = bracketed[1]!;
+  else if (/^\d{1,3}(\.\d{1,3}){3}:\d+$/.test(ip)) ip = ip.slice(0, ip.lastIndexOf(":")); // IPv4:port
+  return isIP(ip) ? ip.toLowerCase() : "invalid";
 }
 
 export function resolveRequestId(request: Request): { id: string; fromClient: boolean } {
@@ -81,7 +105,7 @@ async function authenticate(request: NextRequest, repo: N8nRepository): Promise<
   const key = parsed ? await repo.authenticate(parsed.prefix) : null;
   if (!parsed || !key || !safeEqualHex(sha256Hex(parsed.secret), key.secretHash)) {
     // Throttle credential guessing per client IP.
-    await rateLimit(repo, `authfail:${clientIp(request)}`, RATE_LIMITS.authFailuresPerIp);
+    await rateLimit(repo, `authfail:${clientIp(request.headers)}`, RATE_LIMITS.authFailuresPerIp);
     throw new N8nApiError("INVALID_API_KEY");
   }
   return key;
@@ -122,10 +146,11 @@ async function checkSignature(
 
 async function readBody(request: NextRequest): Promise<string> {
   if (request.method === "GET" || request.method === "HEAD") return "";
-  const length = Number(request.headers.get("content-length") ?? "0");
-  if (length > MAX_BODY_BYTES) throw new N8nApiError("PAYLOAD_TOO_LARGE");
-  const text = await request.text();
-  if (Buffer.byteLength(text, "utf8") > MAX_BODY_BYTES) throw new N8nApiError("PAYLOAD_TOO_LARGE");
+  // Bounded read (Prompt 14D): Content-Length AND the actual stream are limited, so a
+  // missing / chunked / lying Content-Length can't make us buffer a large body before auth.
+  const read = await readLimitedBody(request, MAX_BODY_BYTES);
+  if (!read.ok) throw new N8nApiError(read.status === 413 ? "PAYLOAD_TOO_LARGE" : "BAD_REQUEST");
+  const text = read.body.toString("utf8");
   if (text && !request.headers.get("content-type")?.toLowerCase().startsWith("application/json")) {
     throw new N8nApiError("UNSUPPORTED_MEDIA_TYPE");
   }

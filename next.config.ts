@@ -1,10 +1,28 @@
 import type { NextConfig } from "next";
 
-const securityHeaders = [
+/**
+ * Security headers for every route (Prompt 14F).
+ *
+ * CSP is deliberately limited to directives that cannot break scripts, styles or the
+ * Shopify / Google OAuth redirects: no framing (clickjacking), no <base> hijacking, no
+ * plugins. A script-src / style-src policy needs per-request nonces generated in proxy.ts
+ * and dynamic rendering of every page (Next.js 16 CSP guide) — deferred to a dedicated
+ * frontend audit rather than shipping a policy that could break the app. `form-action` is
+ * also left out on purpose: Chrome applies it to the redirect that follows a form
+ * submission, which is how the Connect buttons reach Shopify / Google.
+ */
+export const securityHeaders = [
+  { key: "Content-Security-Policy", value: "frame-ancestors 'none'; base-uri 'self'; object-src 'none'" },
   { key: "X-Frame-Options", value: "DENY" },
   { key: "X-Content-Type-Options", value: "nosniff" },
   { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
   { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
+  // OAuth uses full-page redirects (no popups), so the app never needs a cross-origin opener.
+  { key: "Cross-Origin-Opener-Policy", value: "same-origin" },
+  // HTTPS-only in production (no preload; browsers ignore HSTS on http://localhost anyway).
+  ...(process.env.NODE_ENV === "production"
+    ? [{ key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" }]
+    : []),
 ];
 
 function hostnameOf(url: string | undefined): string | null {
