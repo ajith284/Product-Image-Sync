@@ -10,6 +10,10 @@ import { z } from "zod";
 const serverEnvSchema = z.object({
   /** Supabase secret key (sb_secret_…). Bypasses RLS — server code only. */
   SUPABASE_SECRET_KEY: z.string().trim().min(1).optional(),
+  /** Production n8n webhook used by the authenticated web app to start a sync. */
+  N8N_SYNC_WEBHOOK_URL: z.string().url().optional(),
+  /** Exact Authorization header value configured on the n8n Web App Trigger credential. */
+  N8N_SYNC_WEBHOOK_AUTHORIZATION: z.string().trim().min(1).optional(),
 });
 
 export type ServerEnv = z.infer<typeof serverEnvSchema>;

@@ -88,10 +88,12 @@ export async function getStoreDetails(workspaceId: string, storeId: string) {
       .maybeSingle(),
     supabase
       .from("sync_jobs")
-      .select("id, status, trigger_type, started_at, completed_at, products_processed, images_uploaded, errors_count, created_at")
+      .select(
+        "id, status, trigger_type, dry_run, started_at, completed_at, products_processed, products_synced, images_uploaded, items_total, items_skipped, items_review, items_failed, errors_count, error_code, error_message, created_at",
+      )
       .eq("store_id", storeId)
       .order("created_at", { ascending: false })
-      .limit(5),
+      .limit(10),
     supabase
       .from("google_drive_category_roots")
       .select("folder_id, folder_name, google_account_id, created_at")

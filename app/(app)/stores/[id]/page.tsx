@@ -7,6 +7,8 @@ import { ProductSearchTest } from "@/components/stores/product-search-test";
 import { ShopifyConnectionCard } from "@/components/stores/shopify-connection-card";
 import { StoreStatusBadge } from "@/components/stores/store-status-badge";
 import { formatDate } from "@/components/stores/types";
+import { SyncControl, type SyncJobSnapshot } from "@/components/sync/sync-control";
+import { SyncStatusBadge } from "@/components/sync/sync-status-badge";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,13 +42,31 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
   const [{ id }, query] = await Promise.all([params, searchParams]);
   const { created, shopify: shopifyResult, shopify_error: shopifyError, google: googleResult, google_error: googleError } = query;
 
-  // Store must belong to the CURRENT workspace (and be visible under RLS).
   const details = await getStoreDetails(ctx.workspace.workspaceId, id);
   if (!details) notFound();
   const { store, shopify, drive, jobs } = details;
   const canManage = hasPermission(ctx, "manageStores");
-  // Temporary development tool: on in `npm run dev`; in production only with SHOW_DEV_TOOLS=true.
   const showDevTools = process.env.NODE_ENV !== "production" || process.env.SHOW_DEV_TOOLS === "true";
+  const latestProductionJob = jobs.find((job) => !job.dry_run) ?? null;
+  const initialJob: SyncJobSnapshot | null = latestProductionJob
+    ? {
+        jobId: latestProductionJob.id,
+        status: latestProductionJob.status,
+        progress: {
+          total: latestProductionJob.items_total,
+          processed: latestProductionJob.products_processed,
+          synced: latestProductionJob.products_synced,
+          uploaded: latestProductionJob.images_uploaded,
+          skipped: latestProductionJob.items_skipped,
+          review: latestProductionJob.items_review,
+          failed: latestProductionJob.items_failed,
+          errors: latestProductionJob.errors_count,
+        },
+        error: latestProductionJob.error_message
+          ? { code: latestProductionJob.error_code, message: latestProductionJob.error_message }
+          : null,
+      }
+    : null;
 
   return (
     <>
@@ -120,25 +140,37 @@ export default async function StoreDetailsPage({ params, searchParams }: PagePro
 
         <GoogleDriveCard storeId={store.id} connection={drive} canManage={canManage} />
 
+        <SyncControl
+          storeId={store.id}
+          canManage={canManage}
+          shopifyConnected={shopify?.connection_status === "connected"}
+          driveConnected={drive?.connection_status === "connected"}
+          categories={drive?.category_roots ?? []}
+          initialJob={initialJob}
+        />
+
         <Card className="lg:col-span-2">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <RefreshCwIcon className="size-4" /> Sync
+              <RefreshCwIcon className="size-4" /> Recent Syncs
             </CardTitle>
-            <CardDescription>Recent image syncs for this store.</CardDescription>
+            <CardDescription>Latest image sync jobs for this store.</CardDescription>
           </CardHeader>
           <CardContent>
             {jobs.length === 0 ? (
-              <Placeholder icon={RefreshCwIcon} text="No sync jobs" />
+              <Placeholder icon={RefreshCwIcon} text="No sync jobs yet" />
             ) : (
               <ul className="divide-y">
                 {jobs.map((job) => (
-                  <li key={job.id} className="flex flex-wrap items-center justify-between gap-2 py-3 text-sm">
+                  <li key={job.id} className="flex flex-wrap items-center justify-between gap-3 py-3 text-sm">
                     <span>{formatDate(job.created_at)}</span>
                     <span className="text-muted-foreground">
-                      {job.products_processed} products · {job.images_uploaded} images
+                      {job.products_processed} products · {job.images_uploaded} uploaded · {job.items_skipped} skipped
                     </span>
-                    <Badge variant="outline">{job.status}</Badge>
+                    <span className="flex items-center gap-2">
+                      {job.dry_run ? <Badge variant="outline">Dry run</Badge> : null}
+                      <SyncStatusBadge status={job.status} />
+                    </span>
                   </li>
                 ))}
               </ul>
