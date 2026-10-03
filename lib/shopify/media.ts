@@ -312,20 +312,27 @@ export async function getAttachedProductMediaIds(
     fetch: deps.fetch,
   });
 
+  type ProductMediaIdsData = {
+    product: {
+      id: string;
+      media: {
+        nodes: { id: string }[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    } | null;
+  };
+  type ProductMediaIdsVariables = { id: string; after: string | null };
+
   const ids = new Set<string>();
   let after: string | null = null;
   for (;;) {
-    const { data } = await client.graphql<{
-      product: {
-        id: string;
-        media: {
-          nodes: { id: string }[];
-          pageInfo: { hasNextPage: boolean; endCursor: string | null };
-        };
-      } | null;
-    }>(PRODUCT_MEDIA_IDS_QUERY, { id: input.productId, after });
+    const response: { data: ProductMediaIdsData } = await client.graphql<
+      ProductMediaIdsData,
+      ProductMediaIdsVariables
+    >(PRODUCT_MEDIA_IDS_QUERY, { id: input.productId, after });
 
-    const product = data.product;
+    const product: NonNullable<ProductMediaIdsData["product"]> | null =
+      response.data.product;
     if (!product || product.id !== input.productId) throw new ShopifyUploadError("PRODUCT_NOT_FOUND");
     for (const media of product.media.nodes ?? []) {
       if (MEDIA_IMAGE_GID_RE.test(media.id)) ids.add(media.id);
