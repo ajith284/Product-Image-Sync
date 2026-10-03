@@ -17,8 +17,9 @@ export default async function Page() {
   const hasActive = stores.some((store) => store.sync_status === "in_progress");
 
   return (
-    <>
+    <div className="w-full md:relative md:left-1/2 md:w-[calc(100vw-var(--sidebar-width)-2rem)] md:max-w-[1560px] md:-translate-x-1/2">
       <PageAutoRefresh enabled={hasActive} />
+      <div className="grid gap-5">
       <PageHeader
         title="Sync Jobs"
         description="Every store's latest image sync, live status, and final counts."
@@ -47,6 +48,7 @@ export default async function Page() {
           canManageStores={hasPermission(ctx, "manageStores")}
         />
       )}
-    </>
+      </div>
+    </div>
   );
 }
