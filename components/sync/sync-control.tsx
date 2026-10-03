@@ -67,7 +67,11 @@ export function SyncControl({ storeId, canManage, shopifyConnected, driveConnect
         const body = (await response.json().catch(() => null)) as SyncJobSnapshot | { error?: string } | null;
         if (stopped) return;
         if (!response.ok || !body || !("jobId" in body)) {
-          setError(body && "error" in body ? body.error ?? "We couldn't refresh sync progress." : "We couldn't refresh sync progress.");
+          const message =
+            body && !("jobId" in body) && typeof body.error === "string"
+              ? body.error
+              : "We couldn't refresh sync progress.";
+          setError(message);
           return;
         }
         setError(null);
