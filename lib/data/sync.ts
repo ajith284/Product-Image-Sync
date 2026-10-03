@@ -208,6 +208,117 @@ export async function listReviewItems(workspaceId: string, limit = 200) {
   return (res.data ?? []).map((item) => ({ ...item, store_name: names.get(item.store_id) ?? "Store" }));
 }
 
+
+export type ProductReviewStatus =
+  | "completed"
+  | "no_product_found"
+  | "upload_failed"
+  | "skipped"
+  | "other";
+
+export type ProductReviewItem = {
+  id: string;
+  sync_job_id: string;
+  store_id: string;
+  store_name: string;
+  category_root_id: string | null;
+  category_name: string;
+  drive_folder_id: string;
+  product_name: string;
+  status: ProductReviewStatus;
+  raw_status: string;
+  images_found: number;
+  images_uploaded: number;
+  images_skipped: number;
+  images_failed: number;
+  shopify_product_id: string | null;
+  shopify_product_title: string | null;
+  product_status: string | null;
+  error_message: string | null;
+  updated_at: string;
+};
+
+function productReviewStatus(status: string): ProductReviewStatus {
+  if (status === "synced") return "completed";
+  if (status === "no_product_found") return "no_product_found";
+  if (status === "upload_failed") return "upload_failed";
+  if (status === "skipped") return "skipped";
+  return "other";
+}
+
+/**
+ * Latest product-level sync result per store + Drive product folder.
+ * Unlike listReviewItems(), this includes successfully completed products so
+ * the Review screen can also be used as a complete product-status view.
+ */
+export async function listProductReviewOverview(
+  workspaceId: string,
+  limit = 2000,
+): Promise<ProductReviewItem[]> {
+  const { supabase, stores } = await workspaceStores(workspaceId);
+  const storeIds = stores.map((store) => store.id);
+  if (!storeIds.length) return [];
+
+  const [itemsRes, rootsRes] = await Promise.all([
+    supabase
+      .from("sync_items")
+      .select(
+        "id, sync_job_id, store_id, category_root_id, drive_folder_id, drive_folder_name, shopify_product_id, shopify_product_title, product_status, status, images_found, images_uploaded, images_skipped, images_failed, error_message, updated_at",
+      )
+      .in("store_id", storeIds)
+      .order("updated_at", { ascending: false })
+      .limit(limit),
+    supabase
+      .from("google_drive_category_roots")
+      .select("store_id, folder_id, folder_name")
+      .in("store_id", storeIds),
+  ]);
+  check(itemsRes, "product sync results");
+  check(rootsRes, "Google Drive category folders");
+
+  const storeNames = new Map(stores.map((store) => [store.id, store.name]));
+  const rootNames = new Map(
+    (rootsRes.data ?? []).map((root) => [
+      `${root.store_id}:${root.folder_id}`,
+      root.folder_name,
+    ]),
+  );
+
+  const latest = new Map<string, NonNullable<typeof itemsRes.data>[number]>();
+  for (const item of itemsRes.data ?? []) {
+    const key = `${item.store_id}:${item.drive_folder_id}`;
+    if (!latest.has(key)) latest.set(key, item);
+  }
+
+  return [...latest.values()].map((item) => ({
+    id: item.id,
+    sync_job_id: item.sync_job_id,
+    store_id: item.store_id,
+    store_name: storeNames.get(item.store_id) ?? "Store",
+    category_root_id: item.category_root_id,
+    category_name:
+      (item.category_root_id
+        ? rootNames.get(`${item.store_id}:${item.category_root_id}`)
+        : null) ?? "Uncategorized",
+    drive_folder_id: item.drive_folder_id,
+    product_name:
+      item.drive_folder_name ??
+      item.shopify_product_title ??
+      "Unnamed product folder",
+    status: productReviewStatus(item.status),
+    raw_status: item.status,
+    images_found: item.images_found,
+    images_uploaded: item.images_uploaded,
+    images_skipped: item.images_skipped,
+    images_failed: item.images_failed,
+    shopify_product_id: item.shopify_product_id,
+    shopify_product_title: item.shopify_product_title,
+    product_status: item.product_status,
+    error_message: item.error_message,
+    updated_at: item.updated_at,
+  }));
+}
+
 export async function listActivity(workspaceId: string, limit = 200) {
   const { supabase, stores } = await workspaceStores(workspaceId);
   const names = new Map(stores.map((store) => [store.id, store.name]));
