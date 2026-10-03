@@ -44,6 +44,16 @@ export interface SyncImageRepository {
   recordAttempt(scope: Scope): Promise<SyncImageRecord>;
   markProcessing(scope: Scope, shopifyMediaId: string): Promise<SyncImageRecord>;
   markUploaded(scope: Scope, shopifyMediaId: string): Promise<SyncImageRecord>;
+  /**
+   * Shopify no longer has the previously uploaded media attached to this product.
+   * Reset the ledger row so the unchanged Drive file can be uploaded again.
+   */
+  resetMissing(input: {
+    workspaceId: string;
+    storeId: string;
+    shopifyProductId: string;
+    driveFileId: string;
+  }): Promise<SyncImageRecord>;
   markFailed(scope: Scope, error: { code: string; message: string; retryable: boolean }): Promise<SyncImageRecord>;
 }
 
@@ -130,6 +140,39 @@ export function createSyncImageRepository(): SyncImageRepository {
         p_shopify_media_id: mediaId,
       });
       if (error || !data) fail(error);
+      return toSyncImageRecord(data as Json);
+    },
+    async resetMissing(i) {
+      // This repository uses the service-role client, so re-check workspace → store
+      // before mutating a ledger row. Never trust the caller's store ID alone.
+      const { data: store, error: storeError } = await db
+        .from("stores")
+        .select("id")
+        .eq("id", i.storeId)
+        .eq("workspace_id", i.workspaceId)
+        .maybeSingle();
+      if (storeError || !store) throw new SyncImageAccessError("store_not_found");
+
+      const { data, error } = await db
+        .from("sync_images")
+        .update({
+          upload_status: "pending",
+          shopify_media_id: null,
+          uploaded_at: null,
+          error_code: null,
+          error_message: null,
+          retryable: null,
+          attempt_count: 0,
+          last_attempt_at: null,
+        })
+        .eq("store_id", i.storeId)
+        .eq("shopify_product_id", i.shopifyProductId)
+        .eq("drive_file_id", i.driveFileId)
+        .select(
+          "id, store_id, shopify_product_id, drive_file_id, shopify_media_id, upload_status, error_code, retryable, attempt_count",
+        )
+        .maybeSingle();
+      if (error || !data) throw new SyncImageAccessError("image_not_found");
       return toSyncImageRecord(data as Json);
     },
     async markFailed(s, e) {
