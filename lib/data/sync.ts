@@ -88,6 +88,105 @@ export async function listSyncJobs(workspaceId: string, limit = 100) {
   return (res.data ?? []).map((job) => ({ ...job, store_name: names.get(job.store_id) ?? "Store" }));
 }
 
+
+export type SyncStoreOverviewStatus =
+  | "completed"
+  | "in_progress"
+  | "skipped"
+  | "review"
+  | "failed";
+
+export type SyncStoreOverviewItem = {
+  store_id: string;
+  store_name: string;
+  shopify_domain: string | null;
+  store_status: string;
+  sync_status: SyncStoreOverviewStatus;
+  job_id: string | null;
+  job_status: string | null;
+  dry_run: boolean;
+  created_at: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  products_processed: number;
+  products_synced: number;
+  images_uploaded: number;
+  items_skipped: number;
+  items_review: number;
+  items_failed: number;
+  error_message: string | null;
+};
+
+function overviewStatus(job: {
+  status: string;
+  products_processed: number;
+  items_skipped: number;
+  items_review: number;
+  items_failed: number;
+} | null): SyncStoreOverviewStatus {
+  if (!job) return "skipped";
+  if (job.status === "queued" || job.status === "running") return "in_progress";
+  if (job.status === "failed" || job.items_failed > 0) return "failed";
+  if (job.items_review > 0) return "review";
+  if (job.status === "cancelled" || (job.products_processed === 0 && job.items_skipped > 0)) {
+    return "skipped";
+  }
+  return "completed";
+}
+
+/**
+ * One row per store for the Sync Jobs overview. The newest sync job is used
+ * for the store's metrics/status; stores with no history still remain visible.
+ */
+export async function listSyncStoreOverview(
+  workspaceId: string,
+): Promise<SyncStoreOverviewItem[]> {
+  const { supabase, stores } = await workspaceStores(workspaceId);
+  if (!stores.length) return [];
+
+  const storeIds = stores.map((store) => store.id);
+  const jobsRes = check(
+    await supabase
+      .from("sync_jobs")
+      .select(
+        "id, store_id, status, dry_run, created_at, started_at, completed_at, products_processed, products_synced, images_uploaded, items_skipped, items_review, items_failed, error_message",
+      )
+      .in("store_id", storeIds)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    "sync jobs",
+  );
+
+  const latest = new Map<string, NonNullable<typeof jobsRes.data>[number]>();
+  for (const job of jobsRes.data ?? []) {
+    if (!latest.has(job.store_id)) latest.set(job.store_id, job);
+  }
+
+  return stores.map((store) => {
+    const job = latest.get(store.id) ?? null;
+    return {
+      store_id: store.id,
+      store_name: store.name,
+      shopify_domain: store.shopify_domain,
+      store_status: store.status,
+      sync_status: overviewStatus(job),
+      job_id: job?.id ?? null,
+      job_status: job?.status ?? null,
+      dry_run: job?.dry_run ?? false,
+      created_at: job?.created_at ?? null,
+      started_at: job?.started_at ?? null,
+      completed_at: job?.completed_at ?? null,
+      products_processed: job?.products_processed ?? 0,
+      products_synced: job?.products_synced ?? 0,
+      images_uploaded: job?.images_uploaded ?? 0,
+      items_skipped: job?.items_skipped ?? 0,
+      items_review: job?.items_review ?? 0,
+      items_failed: job?.items_failed ?? 0,
+      error_message: job?.error_message ?? null,
+    };
+  });
+}
+
 export async function listReviewItems(workspaceId: string, limit = 200) {
   const { supabase, stores } = await workspaceStores(workspaceId);
   const storeIds = stores.map((store) => store.id);
