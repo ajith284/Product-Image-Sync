@@ -16,6 +16,8 @@ import {
 } from "@/lib/google/scan";
 import type { ConnectionDeps } from "@/lib/shopify/connection";
 import {
+  getAttachedProductMediaIds as defaultGetAttachedProductMediaIds,
+  ShopifyUploadError,
   uploadProductImage as defaultUpload,
   type UploadProductImageResult,
 } from "@/lib/shopify/media";
@@ -53,6 +55,7 @@ export type WorkerDeps = {
   scan?: typeof defaultScan;
   download?: typeof defaultDownload;
   upload?: typeof defaultUpload;
+  getAttachedProductMediaIds?: typeof defaultGetAttachedProductMediaIds;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   newWorkerId?: () => string;
@@ -186,6 +189,8 @@ export async function runSyncJob(
   const scan = deps.scan ?? defaultScan;
   const download = deps.download ?? defaultDownload;
   const upload = deps.upload ?? defaultUpload;
+  const getAttachedProductMediaIds =
+    deps.getAttachedProductMediaIds ?? defaultGetAttachedProductMediaIds;
   const sleep =
     deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const now = deps.now ?? Date.now;
@@ -496,6 +501,45 @@ export async function runSyncJob(
       item.images.map((i) => i.fileId),
     );
     const byFile = new Map(states.map((s) => [s.driveFileId, s]));
+
+    // Reconcile the ledger with Shopify's live product media before skipping
+    // unchanged images. One Shopify media-list query per matched product, not
+    // one query per image. If an image was manually removed from the product,
+    // reset only that Drive file so it is uploaded again on this run.
+    if (!dryRun) {
+      const unchangedUploaded = item.images.filter((img) => {
+        const state = byFile.get(img.fileId);
+        return state?.uploadStatus === "uploaded" &&
+          predictImageAction(state, img, now(), lease) === "skip";
+      });
+      if (unchangedUploaded.length) {
+        let attached: Set<string>;
+        try {
+          attached = await getAttachedProductMediaIds(
+            { workspaceId, storeId, productId },
+            deps.shopify,
+          );
+        } catch (error) {
+          const e = error instanceof ShopifyUploadError ? error : null;
+          throw new StopJob(
+            e?.code ?? "INTERNAL_ERROR",
+            e?.publicMessage ?? "Shopify product images could not be checked.",
+          );
+        }
+        for (const img of unchangedUploaded) {
+          const state = byFile.get(img.fileId);
+          if (state?.shopifyMediaId && attached.has(state.shopifyMediaId)) continue;
+          await deps.images.resetMissing({
+            workspaceId,
+            storeId,
+            shopifyProductId: productId,
+            driveFileId: img.fileId,
+          });
+          byFile.delete(img.fileId);
+        }
+      }
+    }
+
     const before = { ...progress };
     let itemFailed = 0;
     for (const img of item.images) {
