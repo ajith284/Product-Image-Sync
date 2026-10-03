@@ -7,6 +7,7 @@ import {
   classifyUploadError,
   createFile,
   createStagedUpload,
+  getAttachedProductMediaIds,
   getProductForUpload,
   postToStagedTarget,
   ShopifyUploadError,
@@ -92,6 +93,22 @@ describe("getProductForUpload", () => {
       expect(r).toMatchObject({ status: "failed", error: { code: "PRODUCT_NOT_FOUND" } });
     }
     expect(shop.calls).toHaveLength(0);
+  });
+});
+
+describe("getAttachedProductMediaIds", () => {
+  it("lists current MediaImage IDs attached to the matched product", async () => {
+    const mediaA = "gid://shopify/MediaImage/9101";
+    const mediaB = "gid://shopify/MediaImage/9102";
+    const { shop, deps } = setup({
+      productMediaIds: { [PRODUCT]: [mediaA, mediaB] },
+    });
+    const ids = await getAttachedProductMediaIds(
+      { workspaceId: WORKSPACE_ID, storeId: STORE_ID, productId: PRODUCT },
+      deps,
+    );
+    expect([...ids]).toEqual([mediaA, mediaB]);
+    expect(shop.ops()).toContain("ProductMediaIds");
   });
 });
 
