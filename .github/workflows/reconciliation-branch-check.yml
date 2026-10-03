@@ -1,0 +1,20 @@
+name: Reconciliation branch check
+
+on:
+  push:
+    branches:
+      - shopify-media-reconciliation
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm test -- tests/sync-worker.test.ts tests/shopify-media.test.ts
+      - run: npm run typecheck
+      - run: npm run lint
