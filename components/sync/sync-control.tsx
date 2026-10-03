@@ -56,14 +56,16 @@ export function SyncControl({ storeId, canManage, shopifyConnected, driveConnect
   const [error, setError] = useState<string | null>(null);
   const active = Boolean(job && ACTIVE.has(job.status));
   const category = categories.length === 1 ? categories[0] : null;
+  const jobId = job?.jobId;
+  const jobStatus = job?.status;
 
   useEffect(() => {
-    if (!job || !ACTIVE.has(job.status)) return;
+    if (!jobId || !jobStatus || !ACTIVE.has(jobStatus)) return;
     let stopped = false;
 
     const poll = async () => {
       try {
-        const response = await fetch(`/api/sync-jobs/${job.jobId}`, { cache: "no-store" });
+        const response = await fetch(`/api/sync-jobs/${jobId}`, { cache: "no-store" });
         const body = (await response.json().catch(() => null)) as SyncJobSnapshot | { error?: string } | null;
         if (stopped) return;
         if (!response.ok || !body || !("jobId" in body)) {
@@ -88,7 +90,7 @@ export function SyncControl({ storeId, canManage, shopifyConnected, driveConnect
       stopped = true;
       window.clearInterval(timer);
     };
-  }, [job?.jobId, job?.status, router]);
+  }, [jobId, jobStatus, router]);
 
   const readinessMessage = useMemo(() => {
     if (!shopifyConnected) return "Connect Shopify before starting a sync.";
