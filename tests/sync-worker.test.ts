@@ -221,6 +221,40 @@ describe("sync worker — images and duplicates", () => {
     expect(job(env).progress).toMatchObject({ uploaded: 0, skipped: 3 });
   });
 
+
+  it("13b. image deleted from Shopify product → only that Drive image is uploaded again", async () => {
+    const env = workerEnv();
+    env.db.addJob();
+    await run(env);
+
+    const missing = env.db.images.find(
+      (r) =>
+        r.shopifyProductId === "gid://shopify/Product/1" &&
+        r.driveFileId === "milano1jpgxxxxx",
+    )!;
+    expect(missing.shopifyMediaId).toBeTruthy();
+    env.attachedMediaByProduct
+      .get("gid://shopify/Product/1")!
+      .delete(missing.shopifyMediaId!);
+
+    env.download.mockClear();
+    env.upload.mockClear();
+    env.db.addJob();
+    await run(env);
+
+    expect(uploadedFiles(env)).toEqual(["milano1jpgxxxxx"]);
+    expect(env.download.mock.calls.map((call) => call[0].fileId)).toEqual([
+      "milano1jpgxxxxx",
+    ]);
+    expect(job(env).progress).toMatchObject({
+      uploaded: 1,
+      skipped: 2,
+      failed: 0,
+    });
+    expect(env.db.images.find((r) => r.driveFileId === "milano1jpgxxxxx"))
+      .toMatchObject({ uploadStatus: "uploaded" });
+  });
+
   it("14. changed checksum → uploaded again; same filename with a different Drive file → separate upload", async () => {
     const env = workerEnv();
     env.db.addJob();
