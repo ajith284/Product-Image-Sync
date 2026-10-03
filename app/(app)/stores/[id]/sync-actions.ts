@@ -12,7 +12,9 @@ export type StartStoreSyncState =
 
 export async function startStoreSync(storeId: string): Promise<StartStoreSyncState> {
   const auth = await authorizeStoreManager(storeId, "Only workspace owners and admins can start a sync.");
-  if ("error" in auth) return { ok: false, error: auth.error };
+  if ("error" in auth) {
+    return { ok: false, error: auth.error ?? "You don't have permission to start a sync." };
+  }
 
   const supabase = await createClient();
   const [shopifyRes, driveRes, activeRes] = await Promise.all([
@@ -46,7 +48,6 @@ export async function startStoreSync(storeId: string): Promise<StartStoreSyncSta
     return { ok: false, error: "Connect Google Drive before starting a sync." };
   }
 
-  // If a job is already active, return it instead of creating another one.
   if (activeRes.data) {
     return { ok: true, jobId: activeRes.data.id, status: activeRes.data.status, reused: true };
   }
