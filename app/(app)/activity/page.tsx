@@ -35,7 +35,7 @@ export default async function Page() {
                       {row.store_name} · {formatDateTime(row.created_at)}
                     </p>
                   </div>
-                  <Bade variant="outline" className="max-w-full truncate">
+                  <Badge variant="outline" className="max-w-full truncate">
                     {row.event_type.replaceAll("_", " ")}
                   </Badge>
                 </li>
