@@ -1,0 +1,21 @@
+name: Sync jobs UI branch check
+
+on:
+  push:
+    branches:
+      - sync-jobs-store-overview-ui
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test -- tests/sync-worker.test.ts tests/shopify-media.test.ts
+      - run: npm run build
