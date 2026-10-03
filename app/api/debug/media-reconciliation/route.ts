@@ -62,6 +62,7 @@ export async function GET(request: Request) {
 
   const latestByFolder = new Map<string, NonNullable<typeof items>[number]>();
   for (const item of items ?? []) {
+    if (!item.drive_folder_name) continue;
     const key = item.drive_folder_name.trim().toLowerCase();
     if (!latestByFolder.has(key)) latestByFolder.set(key, item);
   }
