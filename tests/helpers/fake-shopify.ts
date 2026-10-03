@@ -76,6 +76,8 @@ export type FakeShopifyOptions = {
   graphqlHttp?: Partial<Record<string, Resp[]>>;
   fileCreateUserErrors?: { field?: string[]; message: string; code?: string }[];
   fileUpdateUserErrors?: { field?: string[]; message: string; code?: string }[];
+  /** Current MediaImage IDs attached to each product. */
+  productMediaIds?: Record<string, string[]>;
   /** Sequence of fileStatus values returned by node(id); the last one repeats. */
   fileStatuses?: string[];
   fileErrors?: { code: string }[];
@@ -135,6 +137,26 @@ export function fakeShopify(opts: FakeShopifyOptions = {}) {
               data: {
                 product: products.has(id)
                   ? { id, title: "Milano 3 Seater Sofa", status: "DRAFT", mediaCount: { count: 2, precision: "EXACT" } }
+                  : null,
+              },
+            },
+          });
+        }
+        case "ProductMediaIds": {
+          const id = String(body.variables.id);
+          const ids = opts.productMediaIds?.[id] ?? [];
+          return resp({
+            status: 200,
+            body: {
+              data: {
+                product: products.has(id)
+                  ? {
+                      id,
+                      media: {
+                        nodes: ids.map((mediaId) => ({ id: mediaId })),
+                        pageInfo: { hasNextPage: false, endCursor: null },
+                      },
+                    }
                   : null,
               },
             },
@@ -282,6 +304,26 @@ export function fakeImages(opts: { leaseMs?: number; maxAttempts?: number; now?:
       const row = find(s);
       if (row.shopifyMediaId !== mediaId) throw new SyncImageAccessError("image_not_found");
       Object.assign(row, { uploadStatus: "uploaded", errorCode: null, errorMessage: null, retryable: null });
+      return view(row);
+    }),
+    resetMissing: vi.fn(async (i) => {
+      checkStore(i.workspaceId, i.storeId);
+      const row = rows.find(
+        (r) =>
+          r.storeId === i.storeId &&
+          r.shopifyProductId === i.shopifyProductId &&
+          r.driveFileId === i.driveFileId,
+      );
+      if (!row) throw new SyncImageAccessError("image_not_found");
+      Object.assign(row, {
+        uploadStatus: "pending",
+        shopifyMediaId: null,
+        attemptCount: 0,
+        lastAttemptAt: null,
+        errorCode: null,
+        errorMessage: null,
+        retryable: null,
+      });
       return view(row);
     }),
     markFailed: vi.fn(async (s, e) => {
