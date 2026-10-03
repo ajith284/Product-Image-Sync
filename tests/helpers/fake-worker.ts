@@ -312,6 +312,24 @@ export function fakeWorkerDb(clock: { now: number }) {
         retryable: null,
       }),
     ),
+    resetMissing: vi.fn(async (i) => {
+      const r = images.find(
+        (x) =>
+          x.storeId === i.storeId &&
+          x.shopifyProductId === i.shopifyProductId &&
+          x.driveFileId === i.driveFileId,
+      );
+      if (!r) throw new Error("image not found");
+      Object.assign(r, {
+        uploadStatus: "pending",
+        shopifyMediaId: null,
+        attemptCount: 0,
+        lastAttemptAt: null,
+        errorCode: null,
+        retryable: null,
+      });
+      return { ...r };
+    }),
     markFailed: vi.fn(async (s, e) =>
       Object.assign(find(s), {
         uploadStatus: "failed",
@@ -529,6 +547,20 @@ export function workerEnv(
   );
 
   let media = 1000;
+  const attachedMediaByProduct = new Map<string, Set<string>>();
+  const attachedFor = (productId: string) => {
+    let set = attachedMediaByProduct.get(productId);
+    if (!set) {
+      set = new Set<string>();
+      attachedMediaByProduct.set(productId, set);
+    }
+    return set;
+  };
+  const getAttachedProductMediaIds = vi.fn(
+    async ({ productId }: { workspaceId: string; storeId: string; productId: string }) =>
+      new Set(attachedFor(productId)),
+  );
+
   /** Mimics uploadProductImage: sync_image_claim → (Shopify) → mark uploaded. */
   const upload = vi.fn(
     async (
@@ -578,6 +610,7 @@ export function workerEnv(
       const mediaId =
         claim.image.shopifyMediaId ?? `gid://shopify/MediaImage/${++media}`;
       await deps.images.markUploaded(scope, mediaId);
+      attachedFor(input.shopifyProductId).add(mediaId);
       return { status: "uploaded", productId: input.shopifyProductId, mediaId };
     },
   );
@@ -598,9 +631,22 @@ export function workerEnv(
     scan: scan as unknown as WorkerDeps["scan"],
     download: download as unknown as WorkerDeps["download"],
     upload: upload as unknown as WorkerDeps["upload"],
+    getAttachedProductMediaIds:
+      getAttachedProductMediaIds as unknown as WorkerDeps["getAttachedProductMediaIds"],
     sleep: vi.fn(async () => undefined),
     now: () => clock.now,
     newWorkerId: () => `worker-test-${Math.random().toString(36).slice(2, 10)}`,
   };
-  return { clock, db, deps, scan, download, upload, bytesByFile, tree };
+  return {
+    clock,
+    db,
+    deps,
+    scan,
+    download,
+    upload,
+    getAttachedProductMediaIds,
+    attachedMediaByProduct,
+    bytesByFile,
+    tree,
+  };
 }
