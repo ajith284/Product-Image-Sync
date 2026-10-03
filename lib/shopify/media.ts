@@ -179,6 +179,23 @@ export const PRODUCT_FOR_UPLOAD_QUERY = /* GraphQL */ `
   }
 `;
 
+export const PRODUCT_MEDIA_IDS_QUERY = /* GraphQL */ `
+  query ProductMediaIds($id: ID!, $after: String) {
+    product(id: $id) {
+      id
+      media(first: 250, after: $after, query: "media_type:IMAGE", sortKey: POSITION) {
+        nodes {
+          id
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }
+  }
+`;
+
 export const STAGED_UPLOADS_CREATE_MUTATION = /* GraphQL */ `
   mutation StagedUploadsCreate($input: [StagedUploadInput!]!) {
     stagedUploadsCreate(input: $input) {
@@ -270,6 +287,53 @@ export async function getProductForUpload(client: ShopifyAdminClient, productId:
     status: p.status,
     mediaCount: p.mediaCount && p.mediaCount.precision === "EXACT" ? p.mediaCount.count : null,
   };
+}
+
+
+/**
+ * Returns the MediaImage IDs currently attached to a Shopify product.
+ * This is intentionally read-only and paginated. The sync worker uses it once
+ * per matched product to reconcile its upload ledger with Shopify's live state.
+ */
+export async function getAttachedProductMediaIds(
+  input: { workspaceId: string; storeId: string; productId: string },
+  deps: ConnectionDeps,
+): Promise<Set<string>> {
+  if (!PRODUCT_GID_RE.test(input.productId)) throw new ShopifyUploadError("PRODUCT_NOT_FOUND");
+
+  const access = await refreshTokenIfNeeded(input.storeId, deps);
+  if (access.credentials.workspaceId !== input.workspaceId) throw new ShopifyUploadError("STORE_NOT_FOUND");
+  if (access.credentials.connectionStatus !== "connected") throw new ShopifyUploadError("SHOPIFY_NEEDS_RECONNECT");
+
+  const client = createShopifyClient({
+    shop: access.shop,
+    accessToken: access.accessToken,
+    apiVersion: deps.config.apiVersion,
+    fetch: deps.fetch,
+  });
+
+  const ids = new Set<string>();
+  let after: string | null = null;
+  for (;;) {
+    const { data } = await client.graphql<{
+      product: {
+        id: string;
+        media: {
+          nodes: { id: string }[];
+          pageInfo: { hasNextPage: boolean; endCursor: string | null };
+        };
+      } | null;
+    }>(PRODUCT_MEDIA_IDS_QUERY, { id: input.productId, after });
+
+    const product = data.product;
+    if (!product || product.id !== input.productId) throw new ShopifyUploadError("PRODUCT_NOT_FOUND");
+    for (const media of product.media.nodes ?? []) {
+      if (MEDIA_IMAGE_GID_RE.test(media.id)) ids.add(media.id);
+    }
+    if (!product.media.pageInfo.hasNextPage) return ids;
+    after = product.media.pageInfo.endCursor;
+    if (!after) throw new ShopifyUploadError("INVALID_REQUEST");
+  }
 }
 
 /** Secret: never log, store or return outside this module. */
