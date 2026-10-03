@@ -3,7 +3,7 @@ import "server-only";
 import { isSessionError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/server";
 
-const REVIEW_STATUSES = ["no_product_found", "multiple_matches", "upload_failed"] as const;
+const REVIEW_STATUSES = ["no_product_found", "multiple_matches", "upload_failed", "skipped"] as const;
 
 function check<T extends { error: { code?: string; message?: string } | null }>(res: T, what: string): T {
   if (res.error) {
@@ -187,25 +187,96 @@ export async function listSyncStoreOverview(
   });
 }
 
-export async function listReviewItems(workspaceId: string, limit = 200) {
+export type ReviewListItem = {
+  id: string;
+  sync_job_id: string;
+  store_id: string;
+  store_name: string;
+  category_root_id: string | null;
+  category_name: string;
+  code_folder_name: string | null;
+  drive_folder_id: string;
+  drive_folder_name: string | null;
+  shopify_product_id: string | null;
+  shopify_product_title: string | null;
+  product_status: string | null;
+  status: string;
+  images_found: number;
+  images_uploaded: number;
+  images_skipped: number;
+  images_failed: number;
+  match_candidates: unknown;
+  error_message: string | null;
+  updated_at: string;
+};
+
+export async function listReviewItems(
+  workspaceId: string,
+  limit = 2000,
+): Promise<ReviewListItem[]> {
   const { supabase, stores } = await workspaceStores(workspaceId);
   const storeIds = stores.map((store) => store.id);
   if (!storeIds.length) return [];
 
-  const res = check(
-    await supabase
+  const [itemsRes, jobsRes, rootsRes] = await Promise.all([
+    supabase
       .from("sync_items")
       .select(
         "id, sync_job_id, store_id, category_root_id, code_folder_name, drive_folder_id, drive_folder_name, shopify_product_id, shopify_product_title, product_status, status, images_found, images_uploaded, images_skipped, images_failed, match_candidates, error_message, updated_at",
       )
       .in("store_id", storeIds)
-      .in("status", [...REVIEW_STATUSES])
       .order("updated_at", { ascending: false })
       .limit(limit),
-    "review items",
+    supabase
+      .from("sync_jobs")
+      .select("id, dry_run, created_at")
+      .in("store_id", storeIds)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    supabase
+      .from("google_drive_category_roots")
+      .select("store_id, folder_id, folder_name")
+      .in("store_id", storeIds),
+  ]);
+
+  check(itemsRes, "review items");
+  check(jobsRes, "sync jobs");
+  check(rootsRes, "Google Drive category folders");
+
+  const realJobIds = new Set(
+    (jobsRes.data ?? []).filter((job) => job.dry_run === false).map((job) => job.id),
   );
   const names = new Map(stores.map((store) => [store.id, store.name]));
-  return (res.data ?? []).map((item) => ({ ...item, store_name: names.get(item.store_id) ?? "Store" }));
+  const categoryNames = new Map(
+    (rootsRes.data ?? []).map((root) => [
+      `${root.store_id}:${root.folder_id}`,
+      root.folder_name,
+    ]),
+  );
+
+  // Keep only the newest real-sync row for each Drive product folder. If a
+  // later sync succeeded, the previous problem disappears from Review.
+  const latestByProduct = new Map<string, NonNullable<typeof itemsRes.data>[number]>();
+  for (const item of itemsRes.data ?? []) {
+    if (!realJobIds.has(item.sync_job_id)) continue;
+    const key = `${item.store_id}:${item.drive_folder_id}`;
+    if (!latestByProduct.has(key)) latestByProduct.set(key, item);
+  }
+
+  return [...latestByProduct.values()]
+    .filter((item) =>
+      (REVIEW_STATUSES as readonly string[]).includes(item.status),
+    )
+    .map((item) => ({
+      ...item,
+      store_name: names.get(item.store_id) ?? "Store",
+      category_name:
+        (item.category_root_id
+          ? categoryNames.get(`${item.store_id}:${item.category_root_id}`)
+          : null) ??
+        item.code_folder_name ??
+        "Uncategorized",
+    }));
 }
 
 export async function listActivity(workspaceId: string, limit = 200) {
