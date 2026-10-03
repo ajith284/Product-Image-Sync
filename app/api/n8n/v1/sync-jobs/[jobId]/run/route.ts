@@ -5,8 +5,12 @@ import { requireUuid } from "@/lib/n8n/validation";
 import { launchSyncWorker } from "@/lib/sync/launch";
 
 export const dynamic = "force-dynamic";
-/** The worker runs after the response, inside this route's time budget (self-hosted: no limit). */
-export const maxDuration = 800;
+/**
+ * Vercel Hobby accepts at most 300 seconds. The production image-sync worker
+ * still runs on the self-hosted Next.js server behind ngrok, where this Vercel
+ * deployment limit does not control the local Node process.
+ */
+export const maxDuration = 300;
 
 /**
  * POST /api/n8n/v1/sync-jobs/:jobId/run — scope n8n:sync (Prompt 13).
