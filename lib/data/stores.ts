@@ -29,8 +29,6 @@ export async function listStores(workspaceId: string) {
   return res.data ?? [];
 }
 
-const REVIEW_STATUSES = ["no_product_found", "multiple_matches", "upload_failed"];
-
 export async function getDashboardStats(workspaceId: string) {
   const stores = await listStores(workspaceId);
   const storeIds = stores.map((s) => s.id);
@@ -41,21 +39,47 @@ export async function getDashboardStats(workspaceId: string) {
   }
 
   const supabase = await createClient();
-  const [synced, images, review] = await Promise.all([
-    supabase.from("sync_items").select("id", { count: "exact", head: true }).in("store_id", storeIds).eq("status", "synced"),
-    supabase.from("sync_images").select("id", { count: "exact", head: true }).in("store_id", storeIds).eq("upload_status", "uploaded"),
-    supabase.from("sync_items").select("id", { count: "exact", head: true }).in("store_id", storeIds).in("status", REVIEW_STATUSES),
-  ]);
-  check(synced, "sync items");
-  check(images, "images");
-  check(review, "review items");
+  const jobs = check(
+    await supabase
+      .from("sync_jobs")
+      .select(
+        "id, store_id, dry_run, status, created_at, products_synced, images_uploaded, items_review, items_failed",
+      )
+      .in("store_id", storeIds)
+      .eq("dry_run", false)
+      .order("created_at", { ascending: false })
+      .limit(1000),
+    "sync jobs",
+  );
+
+  // Dashboard counters represent the latest real sync for each store.
+  // Do not count the all-time sync_items / sync_images ledger because that
+  // makes the dashboard grow forever and keeps old test-run numbers visible.
+  const latestByStore = new Map<
+    string,
+    NonNullable<typeof jobs.data>[number]
+  >();
+
+  for (const job of jobs.data ?? []) {
+    if (!latestByStore.has(job.store_id)) latestByStore.set(job.store_id, job);
+  }
+
+  let productsSynced = 0;
+  let imagesUploaded = 0;
+  let needsReview = 0;
+
+  for (const job of latestByStore.values()) {
+    productsSynced += job.products_synced ?? 0;
+    imagesUploaded += job.images_uploaded ?? 0;
+    needsReview += (job.items_review ?? 0) + (job.items_failed ?? 0);
+  }
 
   return {
     stores,
     connectedStores,
-    productsSynced: synced.count ?? 0,
-    imagesUploaded: images.count ?? 0,
-    needsReview: review.count ?? 0,
+    productsSynced,
+    imagesUploaded,
+    needsReview,
   };
 }
 
