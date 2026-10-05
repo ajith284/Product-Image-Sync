@@ -117,14 +117,16 @@ function SummaryCard({
   iconClassName: string;
 }) {
   return (
-    <Card className="flex min-w-0 flex-row items-center gap-3 p-4 shadow-sm">
-      <div className={`flex size-11 shrink-0 items-center justify-center rounded-full ${iconClassName}`}>
+    <Card className="min-w-0 p-3.5 shadow-sm">
+      <div className="flex min-w-0 items-center gap-3">
+        <div className={`flex size-10 shrink-0 items-center justify-center rounded-xl ${iconClassName}`}>
         {icon}
-      </div>
-      <div className="min-w-0">
-        <div className="text-sm text-muted-foreground">{label}</div>
-        <div className="text-xl font-semibold tabular-nums">{value}</div>
-        <div className="whitespace-nowrap text-xs text-muted-foreground">{detail}</div>
+        </div>
+        <div className="min-w-0">
+          <div className="truncate text-xs font-medium text-muted-foreground">{label}</div>
+          <div className="text-xl font-semibold leading-6 tabular-nums">{value}</div>
+          <div className="truncate text-[11px] text-muted-foreground">{detail}</div>
+        </div>
       </div>
     </Card>
   );
@@ -200,8 +202,8 @@ export function SyncJobsOverview({
   };
 
   return (
-    <div className="grid gap-4">
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+    <div className="grid min-w-0 gap-4">
+      <div className="grid min-w-0 gap-3 grid-cols-2 md:grid-cols-3 xl:grid-cols-6">
         <SummaryCard
           label="Total Stores"
           value={stores.length}
@@ -246,8 +248,8 @@ export function SyncJobsOverview({
         />
       </div>
 
-      <div className="flex flex-col gap-3 xl:flex-row xl:items-center xl:justify-between">
-        <div className="flex flex-wrap gap-2 xl:flex-nowrap">
+      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(340px,500px)] xl:items-center">
+        <div className="flex min-w-0 flex-wrap gap-2">
           {FILTERS.map((item) => {
             const count = item.key === "all" ? stores.length : counts[item.key];
             const active = filter === item.key;
@@ -258,8 +260,8 @@ export function SyncJobsOverview({
                 onClick={() => setFilter(item.key)}
                 className={
                   active
-                    ? "inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-4 text-sm font-medium text-background"
-                    : "inline-flex h-9 items-center gap-2 rounded-full bg-muted px-4 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    ? "inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-3.5 text-sm font-medium text-background"
+                    : "inline-flex h-9 items-center gap-2 rounded-full bg-muted px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 }
               >
                 {item.label}
@@ -277,8 +279,8 @@ export function SyncJobsOverview({
           })}
         </div>
 
-        <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
-          <div className="relative min-w-0 sm:w-80">
+        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_190px]">
+          <div className="relative min-w-0">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
@@ -287,7 +289,7 @@ export function SyncJobsOverview({
               className="pl-9"
             />
           </div>
-          <div className="relative sm:w-56">
+          <div className="relative min-w-0">
             <CalendarDaysIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <select
               value={sort}
@@ -316,9 +318,9 @@ export function SyncJobsOverview({
             const status = STATUS_META[store.sync_status];
             const active = store.sync_status === "in_progress";
             return (
-              <Card key={store.store_id} className="p-4 shadow-sm">
-                <div className="grid gap-3">
-                  <div className="flex items-start gap-3">
+              <Card key={store.store_id} className="min-w-0 p-4 shadow-sm">
+                <div className="grid min-w-0 gap-3">
+                  <div className="flex min-w-0 items-start gap-3">
                     <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-muted">
                       <StoreIcon className="size-5" />
                     </div>
@@ -335,7 +337,7 @@ export function SyncJobsOverview({
                       </p>
                     </div>
                     <span
-                      className={`inline-flex h-7 shrink-0 items-center rounded-full px-4 text-xs font-semibold ${status.className}`}
+                      className={`inline-flex h-7 max-w-[130px] shrink-0 items-center truncate rounded-full px-3 text-xs font-semibold ${status.className}`}
                     >
                       {status.label}
                     </span>
@@ -375,7 +377,7 @@ export function SyncJobsOverview({
                     </DropdownMenu>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
+                  <div className="grid min-w-0 grid-cols-2 gap-2 md:grid-cols-3 xl:grid-cols-6">
                     <Metric label="Processed" value={store.products_processed} />
                     <Metric label="Synced" value={store.products_synced} />
                     <Metric label="Uploaded" value={store.images_uploaded} />
