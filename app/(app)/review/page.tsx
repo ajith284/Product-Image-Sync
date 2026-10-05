@@ -11,10 +11,19 @@ export default async function Page() {
 
   return (
     <div className="w-full md:relative md:left-1/2 md:w-[calc(100vw-var(--sidebar-width)-2rem)] md:max-w-[1560px] md:-translate-x-1/2">
-      <div className="grid gap-5">
+      <div className="grid gap-6">
         <PageHeader
           title="Review"
-          description="Products from the latest sync state, including completed items and anything that needs attention."
+          description="Products from the latest sync, including completed items and products that need attention."
+          actions={
+            <select
+              defaultValue="latest"
+              className="h-12 rounded-lg border border-input bg-background px-5 text-sm font-medium outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              aria-label="Review sync period"
+            >
+              <option value="latest">Last sync</option>
+            </select>
+          }
         />
         <ReviewProductsTable items={items} />
       </div>
