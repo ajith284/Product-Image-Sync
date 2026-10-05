@@ -4,26 +4,18 @@ import {
   ArrowDownAZIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  MoreVerticalIcon,
   SearchIcon,
-  StoreIcon,
 } from "lucide-react";
-import Link from "next/link";
 import { useMemo, useState } from "react";
 
 import type { ReviewListItem } from "@/lib/data/sync";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
 import { Input } from "@/components/ui/input";
 
 type StatusFilter =
   | "all"
+  | "completed"
   | "no_product_found"
   | "upload_failed"
   | "skipped"
@@ -35,6 +27,7 @@ const PAGE_SIZE = 10;
 
 const FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
+  { key: "completed", label: "Completed" },
   { key: "no_product_found", label: "No product found" },
   { key: "upload_failed", label: "Upload failed" },
   { key: "skipped", label: "Skipped" },
@@ -42,6 +35,7 @@ const FILTERS: { key: StatusFilter; label: string }[] = [
 ];
 
 function bucket(status: string): StatusFilter {
+  if (status === "synced") return "completed";
   if (status === "no_product_found") return "no_product_found";
   if (status === "upload_failed") return "upload_failed";
   if (status === "skipped") return "skipped";
@@ -49,6 +43,12 @@ function bucket(status: string): StatusFilter {
 }
 
 function statusMeta(status: string) {
+  if (status === "synced") {
+    return {
+      label: "Completed",
+      className: "bg-green-100 text-green-700 dark:bg-green-950 dark:text-green-300",
+    };
+  }
   if (status === "no_product_found") {
     return {
       label: "No product found",
@@ -118,6 +118,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
   const counts = useMemo(() => {
     const result: Record<StatusFilter, number> = {
       all: items.length,
+      completed: 0,
       no_product_found: 0,
       upload_failed: 0,
       skipped: 0,
@@ -187,7 +188,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
         <div className="space-y-1">
           <h1 className="text-3xl font-semibold tracking-tight">Review</h1>
           <p className="text-muted-foreground">
-            Products that were held back or had an upload problem during a real sync.
+            Latest product results from real syncs, including completed items and products that need attention.
           </p>
         </div>
 
@@ -285,9 +286,9 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
 
       {items.length === 0 ? (
         <Card className="p-12 text-center">
-          <p className="font-medium">No items require review.</p>
+          <p className="font-medium">No products from a real sync yet.</p>
           <p className="mt-1 text-sm text-muted-foreground">
-            Product matching problems, skipped products, and upload failures will appear here.
+            Run a real sync to see completed products, skipped items, matching issues, and upload failures here.
           </p>
         </Card>
       ) : filtered.length === 0 ? (
@@ -302,7 +303,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
           <Card className="overflow-hidden p-0 shadow-sm">
             <div className="overflow-x-auto">
               <div className="min-w-[1120px] p-3">
-                <div className="grid grid-cols-[2.1fr_1.05fr_1.35fr_.72fr_.72fr_.72fr_.72fr_1.25fr_44px] items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
+                <div className="grid grid-cols-[2.1fr_1.05fr_1.35fr_.72fr_.72fr_.72fr_.72fr_1.25fr] items-center gap-2 px-3 py-2 text-xs font-medium text-muted-foreground">
                   <div>Product Name</div>
                   <div>Category</div>
                   <div>Store</div>
@@ -311,7 +312,6 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
                   <div className="text-center">Skipped</div>
                   <div className="text-center">Failed</div>
                   <div>Status</div>
-                  <div />
                 </div>
 
                 <div className="grid gap-2">
@@ -320,7 +320,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
                     return (
                       <div
                         key={item.id}
-                        className="grid grid-cols-[2.1fr_1.05fr_1.35fr_.72fr_.72fr_.72fr_.72fr_1.25fr_44px] items-center gap-2 rounded-xl border bg-card px-3 py-2.5"
+                        className="grid grid-cols-[2.1fr_1.05fr_1.35fr_.72fr_.72fr_.72fr_.72fr_1.25fr] items-center gap-2 rounded-xl border bg-card px-3 py-2.5"
                       >
                         <div className="min-w-0">
                           <div className="truncate font-semibold">{productName(item)}</div>
@@ -347,26 +347,6 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
                             {meta.label}
                           </span>
                         </div>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="size-8"
-                              aria-label={`Actions for ${productName(item)}`}
-                            >
-                              <MoreVerticalIcon className="size-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem asChild>
-                              <Link href={`/stores/${item.store_id}`}>
-                                <StoreIcon />
-                                Open store
-                              </Link>
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
                       </div>
                     );
                   })}
