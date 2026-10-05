@@ -212,9 +212,7 @@ export async function listReviewItems(workspaceId: string, limit = 200) {
 export type ReviewProductFilterStatus =
   | "completed"
   | "no_product_found"
-  | "upload_failed"
-  | "skipped"
-  | "other";
+  | "failed";
 
 export type ReviewProductItem = {
   id: string;
@@ -251,22 +249,22 @@ function reviewProductStatus(status: string): {
     return { filterStatus: "no_product_found", label: "No product found" };
   }
   if (status === "upload_failed") {
-    return { filterStatus: "upload_failed", label: "Upload failed" };
-  }
-  if (status === "skipped") {
-    return { filterStatus: "skipped", label: "Skipped" };
+    return { filterStatus: "failed", label: "Upload failed" };
   }
   if (status === "multiple_matches") {
-    return { filterStatus: "other", label: "Multiple matches" };
+    return { filterStatus: "failed", label: "Multiple matches" };
+  }
+  if (status === "skipped") {
+    return { filterStatus: "failed", label: "Skipped" };
   }
   if (status === "matched") {
-    return { filterStatus: "other", label: "Matched" };
+    return { filterStatus: "failed", label: "Matched" };
   }
   if (status === "pending") {
-    return { filterStatus: "other", label: "Pending" };
+    return { filterStatus: "failed", label: "Pending" };
   }
   return {
-    filterStatus: "other",
+    filterStatus: "failed",
     label: status.replaceAll("_", " "),
   };
 }
@@ -330,8 +328,8 @@ export async function listReviewProducts(
       drive_folder_id: item.drive_folder_id,
       drive_folder_name: item.drive_folder_name,
       product_name:
-        item.shopify_product_title ??
         item.drive_folder_name ??
+        item.shopify_product_title ??
         "Unnamed product",
       shopify_product_id: item.shopify_product_id,
       shopify_product_title: item.shopify_product_title,
