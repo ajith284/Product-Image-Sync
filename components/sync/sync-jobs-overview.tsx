@@ -248,8 +248,7 @@ export function SyncJobsOverview({
         />
       </div>
 
-      <div className="grid min-w-0 gap-3 xl:grid-cols-[minmax(0,1fr)_minmax(340px,500px)] xl:items-center">
-        <div className="flex min-w-0 flex-wrap gap-2">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
           {FILTERS.map((item) => {
             const count = item.key === "all" ? stores.length : counts[item.key];
             const active = filter === item.key;
@@ -260,8 +259,8 @@ export function SyncJobsOverview({
                 onClick={() => setFilter(item.key)}
                 className={
                   active
-                    ? "inline-flex h-9 items-center gap-2 rounded-full bg-foreground px-3.5 text-sm font-medium text-background"
-                    : "inline-flex h-9 items-center gap-2 rounded-full bg-muted px-3.5 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    ? "inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-foreground px-3 text-sm font-medium text-background"
+                    : "inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-muted px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 }
               >
                 {item.label}
@@ -277,24 +276,22 @@ export function SyncJobsOverview({
               </button>
             );
           })}
-        </div>
-
-        <div className="grid min-w-0 gap-2 sm:grid-cols-[minmax(0,1fr)_190px]">
-          <div className="relative min-w-0">
+        <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">
+          <div className="relative w-[250px] max-w-[42vw] min-w-[180px]">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search stores..."
-              className="pl-9"
+              className="h-10 pl-9"
             />
           </div>
-          <div className="relative min-w-0">
+          <div className="relative w-[190px] min-w-[170px]">
             <CalendarDaysIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
             <select
               value={sort}
               onChange={(event) => setSort(event.target.value as Sort)}
-              className="h-9 w-full appearance-none rounded-md border border-input bg-transparent pl-9 pr-8 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+              className="h-10 w-full appearance-none rounded-md border border-input bg-transparent pl-9 pr-8 text-sm outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
               aria-label="Sort stores"
             >
               <option value="newest">Last Sync (Newest)</option>
@@ -303,7 +300,6 @@ export function SyncJobsOverview({
             </select>
           </div>
         </div>
-      </div>
 
       {visible.length === 0 ? (
         <Card className="p-10 text-center">
