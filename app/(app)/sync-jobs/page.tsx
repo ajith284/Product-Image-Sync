@@ -17,7 +17,7 @@ export default async function Page() {
   const hasActive = stores.some((store) => store.sync_status === "in_progress");
 
   return (
-    <div className="w-full md:relative md:left-1/2 md:w-[calc(100vw-var(--sidebar-width)-2rem)] md:max-w-[1560px] md:-translate-x-1/2">
+    <div className="w-full min-w-0 max-w-full overflow-x-hidden">
       <PageAutoRefresh enabled={hasActive} />
       <div className="grid gap-5">
       <PageHeader
