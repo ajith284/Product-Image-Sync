@@ -3,8 +3,6 @@ import "server-only";
 import { isSessionError } from "@/lib/errors";
 import { createClient } from "@/lib/supabase/server";
 
-const REVIEW_STATUSES = ["no_product_found", "multiple_matches", "upload_failed", "skipped"] as const;
-
 function check<T extends { error: { code?: string; message?: string } | null }>(res: T, what: string): T {
   if (res.error) {
     if (isSessionError(res.error)) throw new Error("session_expired");
@@ -254,8 +252,9 @@ export async function listReviewItems(
     ]),
   );
 
-  // Keep only the newest real-sync row for each Drive product folder. If a
-  // later sync succeeded, the previous problem disappears from Review.
+  // Keep only the newest real-sync row for each Drive product folder.
+  // Review shows the latest outcome for every product, including successful
+  // syncs, so an older problem is replaced by a later successful result.
   const latestByProduct = new Map<string, NonNullable<typeof itemsRes.data>[number]>();
   for (const item of itemsRes.data ?? []) {
     if (!realJobIds.has(item.sync_job_id)) continue;
@@ -263,11 +262,7 @@ export async function listReviewItems(
     if (!latestByProduct.has(key)) latestByProduct.set(key, item);
   }
 
-  return [...latestByProduct.values()]
-    .filter((item) =>
-      (REVIEW_STATUSES as readonly string[]).includes(item.status),
-    )
-    .map((item) => ({
+  return [...latestByProduct.values()].map((item) => ({
       ...item,
       store_name: names.get(item.store_id) ?? "Store",
       category_name:
