@@ -249,6 +249,7 @@ export function SyncJobsOverview({
       </div>
 
       <div className="flex min-w-0 flex-wrap items-center gap-2 xl:flex-nowrap">
+        <div className="inline-grid shrink-0 grid-cols-3 gap-2">
           {FILTERS.map((item) => {
             const count = item.key === "all" ? stores.length : counts[item.key];
             const active = filter === item.key;
@@ -259,8 +260,8 @@ export function SyncJobsOverview({
                 onClick={() => setFilter(item.key)}
                 className={
                   active
-                    ? "inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-foreground px-3 text-sm font-medium text-background"
-                    : "inline-flex h-10 shrink-0 items-center gap-2 rounded-full bg-muted px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
+                    ? "inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full bg-foreground px-3 text-sm font-medium text-background"
+                    : "inline-flex h-10 min-w-0 items-center justify-center gap-2 rounded-full bg-muted px-3 text-sm font-medium text-muted-foreground transition-colors hover:text-foreground"
                 }
               >
                 {item.label}
@@ -276,6 +277,7 @@ export function SyncJobsOverview({
               </button>
             );
           })}
+        </div>
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-2">
           <div className="relative w-[250px] max-w-[42vw] min-w-[180px]">
             <SearchIcon className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
