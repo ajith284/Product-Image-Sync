@@ -6,7 +6,7 @@ import {
   ChevronRightIcon,
   SearchIcon,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import type { ReviewListItem } from "@/lib/data/sync";
 import { Button } from "@/components/ui/button";
@@ -23,7 +23,8 @@ type StatusFilter =
 
 type SortMode = "name_asc" | "name_desc" | "newest" | "store_asc";
 
-const PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 25;
+const PAGE_SIZE_OPTIONS = [10, 25, 50] as const;
 
 const FILTERS: { key: StatusFilter; label: string }[] = [
   { key: "all", label: "All" },
@@ -105,6 +106,8 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
   const [store, setStore] = useState("all");
   const [sort, setSort] = useState<SortMode>("name_asc");
   const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const tableTopRef = useRef<HTMLDivElement | null>(null);
 
   const stores = useMemo(
     () => [...new Set(items.map((item) => item.store_name))].sort((a, b) => a.localeCompare(b)),
@@ -156,10 +159,17 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
       });
   }, [category, items, search, sort, status, store]);
 
-  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(filtered.length / pageSize));
   const safePage = Math.min(page, pageCount);
-  const start = (safePage - 1) * PAGE_SIZE;
-  const visible = filtered.slice(start, start + PAGE_SIZE);
+  const start = (safePage - 1) * pageSize;
+  const visible = filtered.slice(start, start + pageSize);
+
+  const changePage = (nextPage: number) => {
+    setPage(Math.max(1, Math.min(pageCount, nextPage)));
+    requestAnimationFrame(() => {
+      tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  };
 
   const chooseStatus = (next: StatusFilter) => {
     setStatus(next);
@@ -300,6 +310,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
         </Card>
       ) : (
         <>
+          <div ref={tableTopRef} className="scroll-mt-24" />
           <Card className="overflow-hidden p-0 shadow-sm">
             <div className="overflow-x-auto">
               <div className="min-w-[1120px] p-3">
@@ -355,47 +366,77 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
             </div>
           </Card>
 
-          <div className="flex flex-col gap-3 text-sm text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
-            <div>
-              Showing {start + 1}–{Math.min(start + PAGE_SIZE, filtered.length)} of {filtered.length} products
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-9"
-                disabled={safePage <= 1}
-                onClick={() => setPage(Math.max(1, safePage - 1))}
-              >
-                <ChevronLeftIcon className="size-4" />
-              </Button>
-              {pages.map((number, index) => {
-                const previous = pages[index - 1];
-                return (
-                  <span key={number} className="contents">
-                    {previous && number - previous > 1 ? (
-                      <span className="px-1 text-muted-foreground">…</span>
-                    ) : null}
-                    <Button
-                      variant={number === safePage ? "default" : "outline"}
-                      size="icon"
-                      className="size-9"
-                      onClick={() => setPage(number)}
-                    >
-                      {number}
-                    </Button>
-                  </span>
-                );
-              })}
-              <Button
-                variant="outline"
-                size="icon"
-                className="size-9"
-                disabled={safePage >= pageCount}
-                onClick={() => setPage(Math.min(pageCount, safePage + 1))}
-              >
-                <ChevronRightIcon className="size-4" />
-              </Button>
+          <div className="sticky bottom-3 z-30 rounded-xl border bg-background/95 p-3 shadow-lg backdrop-blur supports-[backdrop-filter]:bg-background/85">
+            <div className="flex flex-col gap-3 text-sm sm:flex-row sm:items-center sm:justify-between">
+              <div className="font-medium text-foreground">
+                Showing {start + 1}–{Math.min(start + pageSize, filtered.length)} of {filtered.length} products
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="flex items-center gap-2 text-muted-foreground">
+                  <span className="hidden sm:inline">Rows</span>
+                  <select
+                    value={pageSize}
+                    onChange={(event) => {
+                      setPageSize(Number(event.target.value));
+                      setPage(1);
+                      requestAnimationFrame(() => {
+                        tableTopRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+                      });
+                    }}
+                    className="h-9 rounded-md border border-input bg-background px-2 text-sm text-foreground outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
+                    aria-label="Products per page"
+                  >
+                    {PAGE_SIZE_OPTIONS.map((size) => (
+                      <option key={size} value={size}>
+                        {size}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+
+                <div className="flex items-center gap-1">
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-9"
+                    disabled={safePage <= 1}
+                    onClick={() => changePage(safePage - 1)}
+                    aria-label="Previous page"
+                  >
+                    <ChevronLeftIcon className="size-4" />
+                  </Button>
+                  {pages.map((number, index) => {
+                    const previous = pages[index - 1];
+                    return (
+                      <span key={number} className="contents">
+                        {previous && number - previous > 1 ? (
+                          <span className="px-1 text-muted-foreground">…</span>
+                        ) : null}
+                        <Button
+                          variant={number === safePage ? "default" : "outline"}
+                          size="icon"
+                          className="size-9"
+                          onClick={() => changePage(number)}
+                          aria-label={`Go to page ${number}`}
+                        >
+                          {number}
+                        </Button>
+                      </span>
+                    );
+                  })}
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-9"
+                    disabled={safePage >= pageCount}
+                    onClick={() => changePage(safePage + 1)}
+                    aria-label="Next page"
+                  >
+                    <ChevronRightIcon className="size-4" />
+                  </Button>
+                </div>
+              </div>
             </div>
           </div>
         </>
