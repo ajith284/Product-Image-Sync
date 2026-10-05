@@ -300,6 +300,7 @@ export function SyncJobsOverview({
             </select>
           </div>
         </div>
+      </div>
 
       {visible.length === 0 ? (
         <Card className="p-10 text-center">
