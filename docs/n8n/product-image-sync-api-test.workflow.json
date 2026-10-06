@@ -47,12 +47,7 @@
         "url": "={{ $('Config').first().json.baseUrl }}/health",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            }
-          ]
+          "parameters": []
         },
         "options": {
           "response": {
@@ -130,12 +125,7 @@
         "url": "={{ $('Config').first().json.baseUrl }}/health",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            }
-          ]
+          "parameters": []
         },
         "options": {
           "response": {
@@ -178,12 +168,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            }
-          ]
+          "parameters": []
         },
         "options": {
           "response": {
@@ -268,12 +253,7 @@
         "genericAuthType": "httpHeaderAuth",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            }
-          ]
+          "parameters": []
         },
         "options": {
           "response": {
@@ -370,10 +350,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "Content-Type",
               "value": "application/json"
@@ -476,10 +452,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json"
             },
@@ -543,10 +515,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-get"
@@ -638,10 +606,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
-            {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-get"
             }
@@ -694,10 +658,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-cancel"
@@ -789,10 +749,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
-            {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-cancel"
             }
@@ -845,10 +801,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-get-again"
@@ -939,10 +891,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-get-again"
