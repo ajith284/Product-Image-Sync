@@ -295,10 +295,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
-            {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-health"
             }
@@ -432,10 +428,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-status"
@@ -624,10 +616,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
-            {
               "name": "Content-Type",
               "value": "application/json"
             },
@@ -778,10 +766,6 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
-            {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-run"
             }
@@ -920,10 +904,6 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            {
-              "name": "x-local-dev-unused",
-              "value": "true"
-            },
             {
               "name": "X-Request-ID",
               "value": "=n8n-{{ $execution.id }}-poll-{{ $runIndex }}"
