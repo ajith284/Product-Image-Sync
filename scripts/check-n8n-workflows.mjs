@@ -153,19 +153,19 @@ function validate(file, expect) {
   else fail("authorization header in node");
   if (
     http.every((n) =>
-      n.parameters.headerParameters.parameters.some(
-        (h) => h.name === "ngrok-skip-browser-warning" && h.value === "true",
+      n.parameters.headerParameters.parameters.every(
+        (h) => h.name !== "ngrok-skip-browser-warning",
       ),
     )
   )
-    pass("ngrok-skip-browser-warning on every request");
-  else fail("ngrok header missing");
+    pass("no ngrok-only headers in local workflows");
+  else fail("ngrok-only header present");
   const hits = SECRET_PATTERNS.filter((p) => p.test(raw));
   if (hits.length === 0) pass("no secrets / tokens / Bearer in the file");
   else fail(`secret patterns: ${hits}`);
-  if (raw.includes("DEVELOPMENT ONLY"))
-    pass("ngrok baseUrl labelled DEVELOPMENT ONLY");
-  else fail("missing DEVELOPMENT ONLY label");
+  if (raw.includes("http://localhost:3000/api/n8n/v1"))
+    pass("local Product Image Sync API baseUrl configured");
+  else fail("local Product Image Sync API baseUrl missing");
 
   // expressions + code
   const exprs = [];
