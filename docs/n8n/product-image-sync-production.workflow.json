@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Product Image Sync — Production\nCreates a REAL sync job (dry_run=false), starts the server-side worker, polls until it finishes.\n\nn8n only calls the Product Image Sync API with the **Product Image Sync API** Header Auth credential. Google and Shopify tokens never leave the server.\n\n**baseUrl in Config is DEVELOPMENT ONLY (ngrok).** Replace it with the production API URL before activating.",
+        "content": "## Product Image Sync — Production\nCreates a REAL sync job (dry_run=false), starts the server-side worker, polls until it finishes.\n\nn8n only calls the Product Image Sync API with the **Product Image Sync API** Header Auth credential. Google and Shopify tokens never leave the server.\n\n**baseUrl in Config is LOCAL DEVELOPMENT.** n8n and the Next.js app run on the same computer.",
         "height": 340,
         "width": 420,
         "color": 5
@@ -74,13 +74,13 @@
             {
               "id": "bcf51cbb-fed8-59b8-adb9-5baf81178a26",
               "name": "baseUrl",
-              "value": "https://reach-rental-heat.ngrok-free.dev/api/n8n/v1",
+              "value": "http://localhost:3000/api/n8n/v1",
               "type": "string"
             },
             {
               "id": "f28ee9f3-b73d-526b-b1f8-41f991998aa9",
               "name": "baseUrlNote",
-              "value": "DEVELOPMENT ONLY — ngrok tunnel. Replace baseUrl with the production API URL.",
+              "value": "LOCAL DEVELOPMENT — n8n calls the Product Image Sync app at http://localhost:3000.",
               "type": "string"
             },
             {
@@ -333,7 +333,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -471,7 +471,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -662,7 +662,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -816,7 +816,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -959,7 +959,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
