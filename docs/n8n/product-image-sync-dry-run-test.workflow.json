@@ -3,7 +3,7 @@
   "nodes": [
     {
       "parameters": {
-        "content": "## Product Image Sync — Dry Run Test\nTEST ONLY. Creates a DRY-RUN job (dry_run=true): Drive scan + Shopify matching + image metadata.\nNo image download, no Shopify upload, no Drive/Shopify changes.\n\nn8n only calls the Product Image Sync API with the **Product Image Sync API** Header Auth credential. Google and Shopify tokens never leave the server.\n\n**baseUrl in Config is DEVELOPMENT ONLY (ngrok).** Replace it with the production API URL before activating.",
+        "content": "## Product Image Sync — Dry Run Test\nTEST ONLY. Creates a DRY-RUN job (dry_run=true): Drive scan + Shopify matching + image metadata.\nNo image download, no Shopify upload, no Drive/Shopify changes.\n\nn8n only calls the Product Image Sync API with the **Product Image Sync API** Header Auth credential. Google and Shopify tokens never leave the server.\n\n**baseUrl in Config is LOCAL DEVELOPMENT.** n8n and the Next.js app run on the same computer.",
         "height": 340,
         "width": 420,
         "color": 3
@@ -36,13 +36,13 @@
             {
               "id": "1493486c-889e-5fcd-a4df-dfa4253274c4",
               "name": "baseUrl",
-              "value": "https://reach-rental-heat.ngrok-free.dev/api/n8n/v1",
+              "value": "http://localhost:3000/api/n8n/v1",
               "type": "string"
             },
             {
               "id": "9697f6de-3a44-5ad9-8ae5-d67dffd00310",
               "name": "baseUrlNote",
-              "value": "DEVELOPMENT ONLY — ngrok tunnel. Replace baseUrl with the production API URL.",
+              "value": "LOCAL DEVELOPMENT — n8n calls the Product Image Sync app at http://localhost:3000.",
               "type": "string"
             },
             {
@@ -295,7 +295,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -433,7 +433,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -624,7 +624,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -778,7 +778,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
@@ -921,7 +921,7 @@
         "headerParameters": {
           "parameters": [
             {
-              "name": "ngrok-skip-browser-warning",
+              "name": "x-local-dev-unused",
               "value": "true"
             },
             {
