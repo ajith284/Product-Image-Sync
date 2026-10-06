@@ -6,7 +6,7 @@ n8n gets **only** a Product Image Sync API key — never Shopify, Google, or Sup
 
 ```text
 Base URL: https://YOUR-APP-DOMAIN/api/n8n/v1
-          (dev: https://<your-ngrok-domain>/api/n8n/v1)
+          (local: http://localhost:3000/api/n8n/v1)
 ```
 
 ## 1. Create an API key
