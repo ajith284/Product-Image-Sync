@@ -36,7 +36,7 @@ import uuid
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CRED = {"httpHeaderAuth": {"name": "Product Image Sync API"}}
-BASE = "https://reach-rental-heat.ngrok-free.dev/api/n8n/v1"
+BASE = "http://localhost:3000/api/n8n/v1"
 STORE = "7bb362f0-ce91-4b0b-a81b-373d49f2b242"
 CFG = "$('Config').first().json"
 
@@ -69,8 +69,7 @@ class WF:
             params["genericAuthType"] = "httpHeaderAuth"
         params["sendHeaders"] = True
         params["headerParameters"] = {
-            "parameters": [{"name": "ngrok-skip-browser-warning", "value": "true"}]
-            + [{"name": k, "value": v} for k, v in headers]
+            "parameters": [{"name": k, "value": v} for k, v in headers]
         }
         if json_body is not None:
             params["sendBody"] = True
@@ -210,7 +209,7 @@ def build(mode):
            "No image download, no Shopify upload, no Drive/Shopify changes.\n\n")
         + "n8n only calls the Product Image Sync API with the **Product Image Sync API** Header Auth credential. "
           "Google and Shopify tokens never leave the server.\n\n"
-          "**baseUrl in Config is DEVELOPMENT ONLY (ngrok).** Replace it with the production API URL before activating."
+          "**baseUrl in Config is LOCAL DEVELOPMENT.** n8n and the Next.js app run on the same computer."
     ), [-460, -420], 420, 340, 5 if prod else 3)
     if prod:
         wf.note("Note: Schedule", (
@@ -238,7 +237,7 @@ def build(mode):
         "mode": "manual",
         "assignments": {"assignments": [
             a("baseUrl", BASE),
-            a("baseUrlNote", "DEVELOPMENT ONLY — ngrok tunnel. Replace baseUrl with the production API URL."),
+            a("baseUrlNote", "LOCAL DEVELOPMENT — n8n calls the Product Image Sync app at http://localhost:3000."),
             a("storeId", STORE),
             a("triggerSource", trigger),
             a("dryRun", not prod, "boolean"),
