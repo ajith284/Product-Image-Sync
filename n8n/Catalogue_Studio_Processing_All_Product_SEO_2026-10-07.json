@@ -1,0 +1,1216 @@
+{
+  "name": "Catalogue Studio Processing",
+  "nodes": [
+    {
+      "id": "dc347f60-e38b-4dab-830b-e7de8879d216",
+      "name": "Receive Catalogue Job",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "catalogue-studio/process-job-v2",
+        "authentication": "none",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "338dc99d-1a0c-40ff-894a-562249c65dd0"
+    },
+    {
+      "id": "f89b0c2c-6b14-430a-8e6b-0e850636fd24",
+      "name": "Normalize Request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        500,
+        300
+      ],
+      "parameters": {
+        "mode": "manual",
+        "assignments": {
+          "assignments": [
+            {
+              "id": "job-id",
+              "name": "job_id",
+              "value": "={{ $json.body?.job_id ?? $json.job_id ?? \"\" }}",
+              "type": "string"
+            },
+            {
+              "id": "org-id",
+              "name": "organization_id",
+              "value": "={{ $json.body?.organization_id ?? $json.organization_id ?? \"\" }}",
+              "type": "string"
+            }
+          ]
+        },
+        "includeOtherFields": false,
+        "options": {}
+      }
+    },
+    {
+      "id": "397bc406-1dba-43fa-93ba-67a385703956",
+      "name": "Fetch Catalogue Job",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        760,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "get",
+        "useCustomSchema": false,
+        "tableId": "catalogue_jobs",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "keyValue": "={{ $json.job_id }}"
+            },
+            {
+              "keyName": "organization_id",
+              "keyValue": "={{ $json.organization_id }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "eLsnZR9V0lYs1FAe",
+          "name": "Catalogue Studio Supabase"
+        }
+      }
+    },
+    {
+      "id": "5a4fb14e-a70f-4efa-b29f-933def72d2e2",
+      "name": "Mark Job Processing",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        300
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "useCustomSchema": false,
+        "tableId": "catalogue_jobs",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.id }}"
+            },
+            {
+              "keyName": "organization_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.organization_id }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "status",
+              "fieldValue": "processing"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "n8n_started"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "1"
+            },
+            {
+              "fieldId": "workflow_execution_id",
+              "fieldValue": "={{ $execution.id }}"
+            },
+            {
+              "fieldId": "started_at",
+              "fieldValue": "={{ $now.toISO() }}"
+            }
+          ]
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "eLsnZR9V0lYs1FAe",
+          "name": "Catalogue Studio Supabase"
+        }
+      }
+    },
+    {
+      "id": "cde60b17-67f7-4661-bd56-959316d98168",
+      "name": "Acknowledge Job",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.5,
+      "position": [
+        1280,
+        300
+      ],
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { accepted: true, job_id: $(\"Normalize Request\").item.json.job_id, execution_id: $execution.id } }}",
+        "options": {
+          "responseCode": 202
+        }
+      }
+    },
+    {
+      "id": "c33cd799-8446-411f-a192-ca88e5caba0b",
+      "name": "Download Catalogue ZIP",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        1280,
+        500
+      ],
+      "parameters": {
+        "method": "GET",
+        "url": "=https://gislynuuhjbvfjqosgtp.supabase.co/storage/v1/object/authenticated/catalogue-inputs/{{ $json.input_storage_path }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "file",
+              "outputPropertyName": "data"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "eLsnZR9V0lYs1FAe",
+          "name": "Catalogue Studio Supabase"
+        }
+      }
+    },
+    {
+      "id": "32436bb0-c13e-4b58-8a6c-240e3b0a8144",
+      "name": "Extract Catalogue ZIP",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "position": [
+        1540,
+        500
+      ],
+      "parameters": {
+        "operation": "decompress",
+        "outputPrefix": "file_"
+      }
+    },
+    {
+      "id": "2d537883-9255-4dc6-af5a-9c59cb4fa96a",
+      "name": "Detect Product Folders",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1800,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nif (items.length === 0) {\n  return [];\n}\n\nconst source = items[0];\nconst binary = source.binary ?? {};\n\nconst ignoredRootNames = new Set([\n  \"__MACOSX\",\n  \".DS_Store\",\n  \"Thumbs.db\",\n]);\n\nconst groups = new Map();\n\nfor (const [binaryKey, file] of Object.entries(binary)) {\n  const directory = String(file.directory ?? \"\")\n    .replace(/\\\\/g, \"/\")\n    .replace(/^\\/+|\\/+$/g, \"\");\n\n  const fileName = String(file.fileName ?? \"\");\n\n  if (!directory || !fileName) {\n    continue;\n  }\n\n  const parts = directory\n    .split(\"/\")\n    .map((part) => part.trim())\n    .filter(Boolean);\n\n  if (parts.length === 0) {\n    continue;\n  }\n\n  if (\n    parts.some(\n      (part) =>\n        part === \"..\" ||\n        part === \".\" ||\n        part.includes(\"\\0\")\n    )\n  ) {\n    continue;\n  }\n\n  const firstLevelFolder = parts[0];\n\n  if (\n    ignoredRootNames.has(firstLevelFolder) ||\n    firstLevelFolder.startsWith(\".\")\n  ) {\n    continue;\n  }\n\n  if (!groups.has(firstLevelFolder)) {\n    groups.set(firstLevelFolder, {\n      files: [],\n      childFolders: new Set(),\n    });\n  }\n\n  const group = groups.get(firstLevelFolder);\n\n  group.files.push({\n    binaryKey,\n    file,\n    directory,\n    fileName,\n  });\n\n  if (\n    parts.length >= 2 &&\n    parts[1] !== \"OG\" &&\n    parts[1] !== \"__MACOSX\" &&\n    !parts[1].startsWith(\".\")\n  ) {\n    group.childFolders.add(parts[1]);\n  }\n}\n\nconst output = [];\n\nfor (const [firstLevelFolder, group] of groups.entries()) {\n  const childFolders = [...group.childFolders];\n\n  const productName =\n    childFolders.length === 1\n      ? childFolders[0]\n      : firstLevelFolder;\n\n  const productFolder =\n    childFolders.length === 1\n      ? `${firstLevelFolder}/${childFolders[0]}`\n      : firstLevelFolder;\n\n  const productBinary = {};\n\n  for (const entry of group.files) {\n    productBinary[entry.binaryKey] =\n      entry.file;\n  }\n\n  output.push({\n    json: {\n      ...source.json,\n      first_level_folder:\n        firstLevelFolder,\n      product_folder:\n        productFolder,\n      product_name:\n        productName,\n      detected_child_folders:\n        childFolders,\n      extracted_file_count:\n        group.files.length,\n    },\n    binary: productBinary,\n  });\n}\n\noutput.sort((a, b) =>\n  a.json.first_level_folder.localeCompare(\n    b.json.first_level_folder,\n    undefined,\n    {\n      numeric: true,\n      sensitivity: \"base\",\n    }\n  )\n);\n\nreturn output;"
+      }
+    },
+    {
+      "id": "fb4998a9-0bc4-4a62-a9f3-7de813b64323",
+      "name": "Select Product Images",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2060,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst allowedExtensions = new Set([\n  \"jpg\",\n  \"jpeg\",\n  \"png\",\n  \"webp\",\n  \"avif\",\n]);\n\nconst results = [];\n\nfor (const item of items) {\n  const binary = item.binary ?? {};\n  const candidates = [];\n\n  for (const [binaryKey, file] of Object.entries(binary)) {\n    const directory = String(file.directory ?? \"\")\n      .replace(/\\\\/g, \"/\")\n      .replace(/^\\/+|\\/+$/g, \"\");\n\n    const fileName = String(file.fileName ?? \"\").trim();\n    const mimeType = String(file.mimeType ?? \"\").toLowerCase();\n\n    if (!fileName) {\n      continue;\n    }\n\n    const pathParts = directory\n      .split(\"/\")\n      .map((part) => part.trim())\n      .filter(Boolean);\n\n    const hasIgnoredFolder = pathParts.some((part) => {\n      const value = part.toLowerCase();\n\n      return (\n        value === \"og\" ||\n        value === \"__macosx\" ||\n        value.startsWith(\".\")\n      );\n    });\n\n    if (hasIgnoredFolder) {\n      continue;\n    }\n\n    if (fileName.startsWith(\".\")) {\n      continue;\n    }\n\n    const extension = String(\n      file.fileExtension ??\n      fileName.split(\".\").pop() ??\n      \"\"\n    )\n      .toLowerCase()\n      .replace(/^\\./, \"\");\n\n    if (!allowedExtensions.has(extension)) {\n      continue;\n    }\n\n    if (\n      file.fileType !== \"image\" &&\n      !mimeType.startsWith(\"image/\")\n    ) {\n      continue;\n    }\n\n    const numericPrefixMatch =\n      fileName.match(/^(\\d+)/);\n\n    const numericPrefix =\n      numericPrefixMatch\n        ? Number(numericPrefixMatch[1])\n        : Number.MAX_SAFE_INTEGER;\n\n    candidates.push({\n      binaryKey,\n      file,\n      fileName,\n      directory,\n      extension,\n      mimeType,\n      numericPrefix,\n    });\n  }\n\n  candidates.sort((a, b) => {\n    if (a.numericPrefix !== b.numericPrefix) {\n      return a.numericPrefix - b.numericPrefix;\n    }\n\n    return a.fileName.localeCompare(\n      b.fileName,\n      undefined,\n      {\n        numeric: true,\n        sensitivity: \"base\",\n      }\n    );\n  });\n\n  const selected = candidates.slice(0, 6);\n  const selectedBinary = {};\n  const manifest = [];\n\n  selected.forEach((entry, index) => {\n    const selectedKey = `image_${index + 1}`;\n\n    selectedBinary[selectedKey] =\n      entry.file;\n\n    manifest.push({\n      order: index + 1,\n      binary_key: selectedKey,\n      source_binary_key:\n        entry.binaryKey,\n      file_name:\n        entry.fileName,\n      directory:\n        entry.directory,\n      extension:\n        entry.extension,\n      mime_type:\n        entry.mimeType,\n      bytes:\n        entry.file.bytes ?? null,\n    });\n  });\n\n  results.push({\n    json: {\n      ...item.json,\n      candidate_image_count:\n        candidates.length,\n      selected_image_count:\n        selected.length,\n      ignored_image_count:\n        Math.max(\n          0,\n          Object.keys(binary).length -\n            selected.length\n        ),\n      selected_images:\n        manifest,\n      image_selection_needs_review:\n        selected.length === 0,\n    },\n    binary: selectedBinary,\n  });\n}\n\nreturn results;"
+      }
+    },
+    {
+      "id": "6cc02804-91a3-4c49-9e88-b0c988022050",
+      "name": "Prepare Images for AI",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2320,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\nconst output = [];\n\nfor (const item of items) {\n  const selected = Array.isArray(item.json.selected_images)\n    ? item.json.selected_images\n    : [];\n\n  for (const image of selected) {\n    const sourceKey = image.binary_key;\n    const file = item.binary?.[sourceKey];\n\n    if (!file) {\n      continue;\n    }\n\n    output.push({\n      json: {\n        ...item.json,\n        ai_image_order: image.order,\n        ai_source_file_name: image.file_name,\n        ai_source_directory: image.directory,\n        ai_source_mime_type: image.mime_type,\n      },\n      binary: {\n        data: file,\n      },\n    });\n  }\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "9f78211a-df08-4567-8b07-cf1a6991f3b1",
+      "name": "AI Image Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        2580,
+        500
+      ],
+      "parameters": {
+        "resource": "image",
+        "operation": "analyze",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.6-luna"
+        },
+        "text": "={{ \"Analyze ONLY what is visibly supported by this furniture product image. Return STRICT JSON only, no markdown. Product name context: \" + $json.product_name + \". Use this exact schema: {\\\"image_order\\\": number, \\\"visible_form\\\": [string], \\\"visible_components\\\": [string], \\\"visible_design_details\\\": [string], \\\"visible_colors\\\": [string], \\\"visible_material_appearance\\\": [string], \\\"visible_functions_or_transformations\\\": [string], \\\"view_or_angle\\\": string, \\\"image_quality_issues\\\": [string], \\\"evidence_notes\\\": [string], \\\"uncertain_observations\\\": [string], \\\"visible_seating_configuration\\\": string, \\\"seating_configuration_confidence\\\": number, \\\"seating_configuration_evidence\\\": string, \\\"visible_product_configuration\\\": string, \\\"product_configuration_confidence\\\": number, \\\"product_configuration_evidence\\\": string}. Rules: observation only. For sofa images, visible_seating_configuration must be exactly one of: 1 seater sofa, 2 seater sofa, 3 seater sofa, 4 seater sofa, sectional sofa, L shaped sofa, sofa with lounger, corner sofa, sofa set, unknown. For non-sofa images use not_applicable. seating_configuration_confidence must be 0-100. Do not infer seat count from stitched channels, cushions, seams, or segmented-looking upholstery alone. Only choose a numbered or structural sofa configuration when the full visible form supports it; otherwise use unknown. seating_configuration_evidence must briefly state the visible evidence or why it is uncertain. For EVERY furniture category, visible_product_configuration must be a short search-useful subtype/configuration that is directly visible, or exactly unknown when no distinct subtype is reliably visible. product_configuration_confidence must be 0-100 and product_configuration_evidence must briefly state the visible proof. Do not merely repeat the category as the configuration. Examples that are allowed ONLY when clearly visible: Sofa Bed: 2 seater sofa bed, 3 seater sofa bed, sectional sofa bed, sofa bed with lounger; Recliner: single recliner chair, 2 seater recliner sofa, 3 seater recliner sofa; Bed: upholstered platform bed, canopy bed, bunk bed, storage bed only when storage is visibly demonstrated; Kids Bed: bunk bed, house bed, loft bed; Headboard: wingback headboard, panel headboard, channel headboard; Ottoman: round ottoman, rectangular ottoman, storage ottoman only when storage is visibly demonstrated; Bench: upholstered bench, backless bench, numbered seating only when visually clear; Dining Chair: arm dining chair or armless dining chair when visible; Office Chair: high back office chair, mesh office chair, swivel office chair only when the swivel base/mechanism is visible; Stool: backless stool or upholstered stool when visible. NEVER infer Single/Double/Queen/King bed size from image proportions. NEVER infer storage, reclining, conversion, swivel, mechanism, seat count, or hidden function unless visibly demonstrated. Do not classify the Shopify product category yet. Do not infer dimensions, foam density, wood species, frame construction, warranty, mechanism type, load rating, exact fabric composition, manufacturing process, certifications, durability, ergonomic claims, sustainability, stain resistance, water resistance, fire resistance, or hidden construction. Do not trust marketing words in filenames as proof. If upholstery looks leather-like, describe only its visible surface appearance and do not identify the material as leather unless independently verified. Mention reclining, storage, or bed conversion only if visibly demonstrated. Put ambiguous points in uncertain_observations.\" }}",
+        "inputType": "base64",
+        "binaryPropertyName": "data",
+        "simplify": true,
+        "options": {
+          "detail": "high",
+          "maxTokens": 1200
+        }
+      }
+    },
+    {
+      "id": "89695f81-1a06-4b9d-9fd2-a67a6c154222",
+      "name": "Aggregate Visual Evidence",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2840,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const aiItems = $input.all();\nconst sourceItems = $(\"Prepare Images for AI\").all();\n\nconst groups = new Map();\n\nfunction getText(value) {\n  if (typeof value === \"string\") return value;\n  if (value === null || value === undefined) return \"\";\n  try {\n    return JSON.stringify(value);\n  } catch {\n    return String(value);\n  }\n}\n\nfunction extractAiPayload(json) {\n  const candidates = [\n    json?.content,\n    json?.text,\n    json?.output_text,\n    json?.output,\n    json?.response,\n    json?.message?.content,\n  ];\n\n  for (const candidate of candidates) {\n    if (candidate !== undefined && candidate !== null) {\n      return getText(candidate);\n    }\n  }\n\n  return getText(json);\n}\n\nfor (let i = 0; i < aiItems.length; i++) {\n  const aiItem = aiItems[i];\n  const source = sourceItems[i]?.json ?? {};\n  const key = String(\n    source.first_level_folder ??\n    source.product_folder ??\n    source.product_name ??\n    i\n  );\n\n  if (!groups.has(key)) {\n    groups.set(key, {\n      source,\n      analyses: [],\n    });\n  }\n\n  groups.get(key).analyses.push({\n    image_order:\n      source.ai_image_order ?? i + 1,\n    file_name:\n      source.ai_source_file_name ?? null,\n    analysis:\n      extractAiPayload(aiItem.json),\n  });\n}\n\nconst output = [];\n\nfor (const { source, analyses } of groups.values()) {\n  analyses.sort(\n    (a, b) =>\n      Number(a.image_order) -\n      Number(b.image_order)\n  );\n\n  output.push({\n    json: {\n      id: source.id,\n      organization_id:\n        source.organization_id,\n      store_id:\n        source.store_id ?? null,\n      name: source.name,\n      original_filename:\n        source.original_filename,\n      input_storage_path:\n        source.input_storage_path,\n      first_level_folder:\n        source.first_level_folder,\n      product_folder:\n        source.product_folder,\n      product_name:\n        source.product_name,\n      selected_image_count:\n        source.selected_image_count ??\n        analyses.length,\n      selected_images:\n        source.selected_images ?? [],\n      visual_evidence:\n        analyses,\n      visual_evidence_count:\n        analyses.length,\n    },\n  });\n}\n\noutput.sort((a, b) =>\n  String(\n    a.json.first_level_folder ?? \"\"\n  ).localeCompare(\n    String(\n      b.json.first_level_folder ?? \"\"\n    ),\n    undefined,\n    {\n      numeric: true,\n      sensitivity: \"base\",\n    }\n  )\n);\n\nreturn output;"
+      }
+    },
+    {
+      "id": "b338114d-9fc5-49ec-9326-216606ee5f16",
+      "name": "Classify Product Category",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3100,
+        500
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.6-luna"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "user",
+              "content": "={{ \"Classify this furniture product using ONLY the visual evidence supplied below. Do not use the product name, SKU, folder name, filenames, or marketing words as classification evidence. Allowed categories only: Sofa, Sofa Bed, Recliner, Armchair, Dining Chair, Ottoman, Bench, Stool, Bed, Headboard, Kids Bed, Office Chair, Unclassified. Rules: Use Sofa Bed only when bed conversion or a bed-like extended sleeping surface is visibly demonstrated. Use Recliner only when reclining function is visibly demonstrated. Use Armchair for a single-seat upholstered lounge chair when it is not visibly a recliner. Use Dining Chair for a dining-style chair. Use Office Chair only when office-chair form is visibly supported. Use Bed or Kids Bed only when a bed frame or sleeping-furniture form is visible; use Kids Bed only when child-specific bed design is visually evident. Use Headboard only when the item is clearly a standalone headboard. If evidence is insufficient or conflicting, use Unclassified. Confidence must be an integer from 0 to 100. Confidence below 70 means the item will later require review. Never invent hidden specifications or materials. Return only the required structured JSON. Visual evidence: \" + JSON.stringify($json.visual_evidence) }}"
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "maxTokens": 700,
+          "store": false,
+          "textFormat": {
+            "textOptions": {
+              "type": "json_schema",
+              "verbosity": "low",
+              "name": "catalogue_category_classification",
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "category",
+                  "confidence",
+                  "classification_basis",
+                  "uncertainties"
+                ],
+                "properties": {
+                  "category": {
+                    "type": "string",
+                    "enum": [
+                      "Sofa",
+                      "Sofa Bed",
+                      "Recliner",
+                      "Armchair",
+                      "Dining Chair",
+                      "Ottoman",
+                      "Bench",
+                      "Stool",
+                      "Bed",
+                      "Headboard",
+                      "Kids Bed",
+                      "Office Chair",
+                      "Unclassified"
+                    ]
+                  },
+                  "confidence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "classification_basis": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 6
+                  },
+                  "uncertainties": {
+                    "type": "array",
+                    "items": {
+                      "type": "string"
+                    },
+                    "maxItems": 6
+                  }
+                }
+              },
+              "description": "Controlled furniture category classification from visual evidence only",
+              "strict": true
+            }
+          }
+        }
+      }
+    },
+    {
+      "id": "a25b8264-d49d-453e-9356-6db21de2fd27",
+      "name": "Normalize Category Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3360,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const aiItems = $input.all();\nconst sourceItems =\n  $(\"Aggregate Visual Evidence\").all();\n\nconst allowed = new Set([\n  \"Sofa\",\n  \"Sofa Bed\",\n  \"Recliner\",\n  \"Armchair\",\n  \"Dining Chair\",\n  \"Ottoman\",\n  \"Bench\",\n  \"Stool\",\n  \"Bed\",\n  \"Headboard\",\n  \"Kids Bed\",\n  \"Office Chair\",\n  \"Unclassified\",\n]);\n\nfunction parseClassification(value) {\n  const visited = new Set();\n\n  function walk(node) {\n    if (node === null || node === undefined) {\n      return null;\n    }\n\n    if (typeof node === \"string\") {\n      const cleaned = node\n        .replace(/^\\s*```(?:json)?/i, \"\")\n        .replace(/```\\s*$/i, \"\")\n        .trim();\n\n      try {\n        return walk(JSON.parse(cleaned));\n      } catch {\n        return null;\n      }\n    }\n\n    if (typeof node !== \"object\") {\n      return null;\n    }\n\n    if (visited.has(node)) {\n      return null;\n    }\n\n    visited.add(node);\n\n    if (\n      typeof node.category === \"string\" &&\n      node.confidence !== undefined\n    ) {\n      return node;\n    }\n\n    if (Array.isArray(node)) {\n      for (const entry of node) {\n        const found = walk(entry);\n        if (found) return found;\n      }\n      return null;\n    }\n\n    for (const child of Object.values(node)) {\n      const found = walk(child);\n      if (found) return found;\n    }\n\n    return null;\n  }\n\n  return walk(value);\n}\n\nconst output = [];\n\nfor (\n  let i = 0;\n  i < aiItems.length;\n  i++\n) {\n  const source =\n    sourceItems[i]?.json ?? {};\n\n  const parsed =\n    parseClassification(\n      aiItems[i]?.json ?? {}\n    );\n\n  const category =\n    parsed &&\n    allowed.has(parsed.category)\n      ? parsed.category\n      : \"Unclassified\";\n\n  let confidence =\n    Number(parsed?.confidence);\n\n  if (\n    !Number.isFinite(confidence)\n  ) {\n    confidence = 0;\n  }\n\n  confidence = Math.max(\n    0,\n    Math.min(\n      100,\n      Math.round(confidence)\n    )\n  );\n\n  const needsReview =\n    category === \"Unclassified\" ||\n    confidence < 70;\n\n  output.push({\n    json: {\n      ...source,\n      category,\n      category_confidence:\n        confidence,\n      category_classification_basis:\n        Array.isArray(\n          parsed?.classification_basis\n        )\n          ? parsed.classification_basis\n          : [],\n      category_uncertainties:\n        Array.isArray(\n          parsed?.uncertainties\n        )\n          ? parsed.uncertainties\n          : [],\n      category_classification_valid:\n        Boolean(parsed) &&\n        allowed.has(category),\n      category_needs_review:\n        needsReview,\n    },\n  });\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "15818cd1-9769-4474-a5c6-3185295ef35c",
+      "name": "Load Active Templates",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        1020,
+        700
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "getAll",
+        "useCustomSchema": false,
+        "tableId": "category_templates",
+        "returnAll": true,
+        "orderBy": "category.asc,version.desc",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "organization_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.organization_id }}"
+            },
+            {
+              "keyName": "status",
+              "condition": "eq",
+              "keyValue": "active"
+            }
+          ]
+        }
+      },
+      "alwaysOutputData": true,
+      "credentials": {
+        "supabaseApi": {
+          "id": "eLsnZR9V0lYs1FAe",
+          "name": "Catalogue Studio Supabase"
+        }
+      }
+    },
+    {
+      "id": "43567d99-6fbb-4956-80b2-088352e5ea14",
+      "name": "Wait for Templates",
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        3620,
+        500
+      ],
+      "parameters": {
+        "mode": "chooseBranch",
+        "numberInputs": 2,
+        "chooseBranchMode": "waitForAll",
+        "output": "specifiedInput",
+        "useDataOfInput": "1"
+      }
+    },
+    {
+      "id": "8a5688ca-1ab6-4a92-a450-3a7d85f12ed4",
+      "name": "Resolve Category Template",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3880,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const products = $input.all();\nconst templateItems = $(\"Load Active Templates\").all();\n\nconst templates = templateItems\n  .map((item) => item.json ?? {})\n  .filter((row) =>\n    row.id &&\n    row.organization_id &&\n    row.category &&\n    row.status === \"active\"\n  );\n\nconst byCategory = new Map();\n\nfor (const template of templates) {\n  const category = String(template.category);\n\n  const existing = byCategory.get(category);\n\n  if (\n    !existing ||\n    Number(template.version ?? 0) >\n      Number(existing.version ?? 0)\n  ) {\n    byCategory.set(category, template);\n  }\n}\n\nreturn products.map((item) => {\n  const row = item.json ?? {};\n  const category = String(\n    row.category ?? \"Unclassified\"\n  );\n\n  const template =\n    category === \"Unclassified\"\n      ? null\n      : byCategory.get(category) ?? null;\n\n  const templateMissing = !template;\n\n  return {\n    json: {\n      ...row,\n      template_used: Boolean(template),\n      template_missing: templateMissing,\n      template_id: template?.id ?? null,\n      template_version:\n        template?.version ?? null,\n      template_content_md:\n        template?.content_md ?? null,\n      needs_review:\n        Boolean(\n          row.category_needs_review\n        ) || templateMissing,\n      review_reasons: [\n        ...(\n          Array.isArray(\n            row.review_reasons\n          )\n            ? row.review_reasons\n            : []\n        ),\n        ...(\n          row.category_needs_review\n            ? [\"category_confidence_or_classification\"]\n            : []\n        ),\n        ...(\n          templateMissing\n            ? [\"category_template_missing\"]\n            : []\n        ),\n      ].filter(\n        (value, index, array) =>\n          array.indexOf(value) === index\n      ),\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "f7536b7b-1959-4727-bb0a-46f9ab707a88",
+      "name": "Generate Product Content",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        4140,
+        500
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.6-luna"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "user",
+              "content": "={{ \"Create catalogue copy using ONLY visual evidence and the PRESELECTED SEO signals that already came from image analysis. Product_Title_Input: \" + $json.product_name + \". PRODUCT_WORD: \" + $json.category + \". Attribute_Extraction: \" + $json.attribute_extraction + \". JACKPOT: \" + JSON.stringify($json.jackpot_selected) + \". Top_List_Selected: \" + JSON.stringify($json.top_list_selected) + \". Meta Title Top terms: \" + JSON.stringify($json.meta_title_top_terms) + \". Meta Description extra Top terms: \" + JSON.stringify($json.meta_description_extra_top_terms) + \". SOFA_CONFIGURATION: \" + String($json.sofa_configuration ?? \"unknown\") + \". SOFA_CONFIGURATION_CONFIDENCE: \" + String($json.sofa_configuration_confidence ?? 0) + \". PRODUCT_CONFIGURATION: \" + String($json.product_configuration ?? \"unknown\") + \". PRODUCT_CONFIGURATION_CONFIDENCE: \" + String($json.product_configuration_confidence ?? 0) + \". Visual evidence: \" + JSON.stringify($json.visual_evidence) + \". Do NOT select or replace SEO terms here. seo_title must be <=60 characters and naturally contain BOTH exact JACKPOT terms plus EVERY exact meta_title_top_terms term. seo_description must be 100-155 characters and naturally contain BOTH exact JACKPOT terms, EVERY exact meta_title_top_terms term, and EVERY exact meta_description_extra_top_terms term. SOFA SEO DESCRIPTION RULE: never hardcode or guess a seating configuration. If PRODUCT_WORD is Sofa AND SOFA_CONFIGURATION_CONFIDENCE is 75 or higher AND SOFA_CONFIGURATION is not unknown/not_applicable, naturally include that exact configuration in seo_description. If confidence is below 75 or configuration is unknown, do not mention a numbered seater, sectional, L shaped, lounger, or corner configuration; use neutral sofa wording instead. Prefer a two-sentence style similar to: '[keyword-led sofa description]. Premium sofa and [confirmed configuration] for stylish modern living rooms.' When configuration is unknown use: '[keyword-led sofa description]. Premium sofa for stylish modern living rooms.' ALL OTHER PRODUCT CATEGORIES: never hardcode or guess a subtype/configuration. If PRODUCT_CONFIGURATION_CONFIDENCE is 75 or higher and PRODUCT_CONFIGURATION is not unknown, you may naturally include that exact confirmed configuration in seo_description. If confidence is below 75 or configuration is unknown, use neutral PRODUCT_WORD wording instead. Never infer Single/Double/Queen/King bed size from images. Never mention storage, reclining, bed conversion, swivel, lounger, orientation, numbered seating, or another mechanism/configuration unless the supplied configuration/evidence explicitly confirms it. Keep the description keyword-led and natural rather than a list of visual observations. Produce exactly 5 distinct Product Highlights supported by visible evidence. Write one SEO/product paragraph of 80-150 words AND 500-1000 characters, preferably 90-120 words and 600-900 characters. Generate Key Features only from supported visual evidence and do not duplicate all five highlights. Do not write Handle, Shopify Title, Type, Warranty, Sizes Available, Customisation Options, Delivery Info, or Exclusions. Never invent dimensions, foam density, wood species, internal frame, warranty, mechanism type, material certification, load rating, exact fabric composition, manufacturing process, certifications, durability, ergonomic claims, sustainability, stain resistance, water resistance, fire resistance, or hidden construction. Never use unsupported claims including Premium quality, Luxury quality, Ergonomic, Orthopaedic, Durable, Long-lasting, Stain-resistant, Water-resistant, Scratch-resistant, Pet-friendly, Child-safe, Eco-friendly, Sustainable, Imported, Handcrafted, Certified, Fire-resistant, Anti-microbial, High-density foam, Solid wood, or Hardwood frame. Material rule: do not output any word containing leather except exact Leatherette, and only when verified source data explicitly says Leatherette.\" }}"
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "maxTokens": 1800,
+          "store": false,
+          "textFormat": {
+            "textOptions": {
+              "type": "json_schema",
+              "verbosity": "low",
+              "name": "catalogue_product_content",
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "highlights",
+                  "seo_paragraph",
+                  "key_features",
+                  "seo_title",
+                  "seo_description"
+                ],
+                "properties": {
+                  "highlights": {
+                    "type": "array",
+                    "minItems": 5,
+                    "maxItems": 5,
+                    "items": {
+                      "type": "string",
+                      "minLength": 12,
+                      "maxLength": 120
+                    }
+                  },
+                  "seo_paragraph": {
+                    "type": "string",
+                    "minLength": 500,
+                    "maxLength": 1000
+                  },
+                  "key_features": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 6,
+                    "items": {
+                      "type": "string",
+                      "minLength": 8,
+                      "maxLength": 120
+                    }
+                  },
+                  "seo_title": {
+                    "type": "string",
+                    "minLength": 30,
+                    "maxLength": 60
+                  },
+                  "seo_description": {
+                    "type": "string",
+                    "minLength": 100,
+                    "maxLength": 155
+                  }
+                }
+              },
+              "description": "Evidence-based catalogue copy using SEO terms already selected from image analysis",
+              "strict": true
+            }
+          }
+        }
+      },
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "bffd07aa-ca61-42b7-98e1-1a73e6c2ffb1",
+      "name": "Build Product Fields",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4400,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const aiItems = $input.all();\nconst sourceItems = $(\"Resolve Category Template\").all();\n\nconst allowedTypes = new Set([\n  \"Sofa\",\n  \"Sofa Bed\",\n  \"Recliner\",\n  \"Armchair\",\n  \"Dining Chair\",\n  \"Ottoman\",\n  \"Bench\",\n  \"Stool\",\n  \"Bed\",\n  \"Headboard\",\n  \"Kids Bed\",\n  \"Office Chair\",\n  \"Unclassified\",\n]);\n\nconst controlledSections = [\n  \"Warranty\",\n  \"Sizes Available\",\n  \"Customisation Options\",\n  \"Delivery Info\",\n  \"Exclusions\",\n];\n\nfunction parseAi(value) {\n  const visited = new Set();\n\n  function walk(node) {\n    if (node === null || node === undefined) {\n      return null;\n    }\n\n    if (typeof node === \"string\") {\n      const cleaned = node\n        .replace(/^\\s*```(?:json)?/i, \"\")\n        .replace(/```\\s*$/i, \"\")\n        .trim();\n\n      try {\n        return walk(JSON.parse(cleaned));\n      } catch {\n        return null;\n      }\n    }\n\n    if (typeof node !== \"object\") {\n      return null;\n    }\n\n    if (visited.has(node)) {\n      return null;\n    }\n\n    visited.add(node);\n\n    if (\n      Array.isArray(node.highlights) &&\n      typeof node.seo_paragraph === \"string\" &&\n      Array.isArray(node.key_features) &&\n      typeof node.seo_title === \"string\" &&\n      typeof node.seo_description === \"string\"\n    ) {\n      return node;\n    }\n\n    if (Array.isArray(node)) {\n      for (const entry of node) {\n        const found = walk(entry);\n        if (found) return found;\n      }\n      return null;\n    }\n\n    for (const child of Object.values(node)) {\n      const found = walk(child);\n      if (found) return found;\n    }\n\n    return null;\n  }\n\n  return walk(value);\n}\n\nfunction escapeHtml(value) {\n  return String(value ?? \"\")\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#39;\");\n}\n\nfunction normalizeHeading(value) {\n  return String(value ?? \"\")\n    .toLowerCase()\n    .replace(/[^a-z0-9 ]+/g, \" \")\n    .replace(/\\s+/g, \" \")\n    .trim();\n}\n\nfunction canonicalHeading(value) {\n  const key = normalizeHeading(value);\n\n  const aliases = new Map([\n    [\"warranty\", \"Warranty\"],\n    [\"sizes available\", \"Sizes Available\"],\n    [\"available sizes\", \"Sizes Available\"],\n    [\"sizes\", \"Sizes Available\"],\n    [\"customisation options\", \"Customisation Options\"],\n    [\"customization options\", \"Customisation Options\"],\n    [\"customisation\", \"Customisation Options\"],\n    [\"customization\", \"Customisation Options\"],\n    [\"delivery info\", \"Delivery Info\"],\n    [\"delivery information\", \"Delivery Info\"],\n    [\"delivery\", \"Delivery Info\"],\n    [\"exclusions\", \"Exclusions\"],\n    [\"exclusion\", \"Exclusions\"],\n  ]);\n\n  return aliases.get(key) ?? null;\n}\n\nfunction extractControlledSections(markdown) {\n  const result = Object.fromEntries(\n    controlledSections.map((name) => [name, \"\"])\n  );\n\n  if (!markdown) return result;\n\n  const lines = String(markdown)\n    .replace(/\\r\\n/g, \"\\n\")\n    .split(\"\\n\");\n\n  let current = null;\n  const buckets = Object.fromEntries(\n    controlledSections.map((name) => [name, []])\n  );\n\n  for (const line of lines) {\n    const headingMatch = line.match(/^#{1,6}\\s+(.+?)\\s*$/);\n\n    if (headingMatch) {\n      current = canonicalHeading(headingMatch[1]);\n      continue;\n    }\n\n    if (current) {\n      buckets[current].push(line);\n    }\n  }\n\n  for (const name of controlledSections) {\n    result[name] = buckets[name]\n      .join(\"\\n\")\n      .trim();\n  }\n\n  return result;\n}\n\nfunction inlineMarkdown(text) {\n  let value = escapeHtml(text);\n\n  value = value\n    .replace(/\\*\\*(.+?)\\*\\*/g, \"<strong>$1</strong>\")\n    .replace(/__(.+?)__/g, \"<strong>$1</strong>\")\n    .replace(/\\*(.+?)\\*/g, \"<em>$1</em>\")\n    .replace(/_(.+?)_/g, \"<em>$1</em>\");\n\n  return value;\n}\n\nfunction markdownToHtml(markdown) {\n  const input = String(markdown ?? \"\").trim();\n\n  if (!input) return \"\";\n\n  const lines = input.split(\"\\n\");\n  const output = [];\n  let listType = null;\n  let paragraph = [];\n\n  function flushParagraph() {\n    if (paragraph.length) {\n      output.push(\n        \"<p>\" +\n        inlineMarkdown(paragraph.join(\" \").trim()) +\n        \"</p>\"\n      );\n      paragraph = [];\n    }\n  }\n\n  function closeList() {\n    if (listType) {\n      output.push(`</${listType}>`);\n      listType = null;\n    }\n  }\n\n  for (const rawLine of lines) {\n    const line = rawLine.trim();\n\n    if (!line) {\n      flushParagraph();\n      closeList();\n      continue;\n    }\n\n    const unordered = line.match(/^[-*+]\\s+(.+)$/);\n    const ordered = line.match(/^\\d+[.)]\\s+(.+)$/);\n\n    if (unordered || ordered) {\n      flushParagraph();\n\n      const wanted = unordered ? \"ul\" : \"ol\";\n\n      if (listType !== wanted) {\n        closeList();\n        output.push(`<${wanted}>`);\n        listType = wanted;\n      }\n\n      output.push(\n        \"<li>\" +\n        inlineMarkdown((unordered || ordered)[1]) +\n        \"</li>\"\n      );\n      continue;\n    }\n\n    if (listType) {\n      closeList();\n    }\n\n    paragraph.push(line);\n  }\n\n  flushParagraph();\n  closeList();\n\n  return output.join(\"\\n\");\n}\n\nfunction slugify(value) {\n  return String(value ?? \"\")\n    .normalize(\"NFKD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, \"-\")\n    .replace(/^-+|-+$/g, \"\")\n    .replace(/-+/g, \"-\");\n}\n\nfunction clampHandle(value) {\n  return slugify(value)\n    .slice(0, 60)\n    .replace(/-+$/g, \"\");\n}\n\nfunction wordCount(value) {\n  const text = String(value ?? \"\").trim();\n  return text ? text.split(/\\s+/).length : 0;\n}\n\nfunction hasForbiddenLeather(value) {\n  const text = String(value ?? \"\");\n\n  if (/\\bLeatherette\\b/.test(text)) {\n    return /\\bleather\\b/i.test(\n      text.replace(/\\bLeatherette\\b/g, \"\")\n    );\n  }\n\n  return /leather/i.test(text);\n}\n\nfunction collectStrings(value) {\n  if (Array.isArray(value)) {\n    return value\n      .map((v) => String(v ?? \"\").trim())\n      .filter(Boolean);\n  }\n\n  return [];\n}\n\nconst usedHandles = new Set();\nconst output = [];\n\nfor (let i = 0; i < sourceItems.length; i++) {\n  const source = sourceItems[i]?.json ?? {};\n  const generated = parseAi(aiItems[i]?.json ?? {});\n\n  const productName = String(source.product_name ?? \"\").trim();\n  const category = allowedTypes.has(source.category)\n    ? source.category\n    : \"Unclassified\";\n\n  const title =\n    `${productName} ${category} Custom Crafted to Order`\n      .replace(/\\s+/g, \" \")\n      .trim();\n\n  const highlights = collectStrings(\n    generated?.highlights\n  ).slice(0, 5);\n\n  const keyFeatures = collectStrings(\n    generated?.key_features\n  ).slice(0, 6);\n\n  const seoParagraph = String(\n    generated?.seo_paragraph ?? \"\"\n  ).trim();\n\n  const seoTitle = String(\n    generated?.seo_title ?? \"\"\n  ).trim();\n\n  const seoDescription = String(\n    generated?.seo_description ?? \"\"\n  ).trim();\n\n  const attributeExtraction = String(\n    source.attribute_extraction ?? \"\"\n  ).trim();\n\n  const jackpotSelected = collectStrings(\n    source.jackpot_selected\n  ).slice(0, 2);\n\n  const topListSelected = collectStrings(\n    source.top_list_selected\n  ).slice(0, 6);\n\n  const metaTitleTopTerms = collectStrings(\n    source.meta_title_top_terms\n  ).slice(0, 2);\n\n  const metaDescriptionExtraTopTerms = collectStrings(\n    source.meta_description_extra_top_terms\n  ).slice(0, 2);\n\n  const productWord = category;\n\n  const handle = slugify([\n    jackpotSelected[0] ?? \"\",\n    productWord,\n    attributeExtraction,\n    productName,\n    jackpotSelected[1] ?? \"\",\n  ].filter(Boolean).join(\"-\"));\n\n  usedHandles.add(handle);\n\n  const sections = extractControlledSections(\n    source.template_content_md\n  );\n\n  const highlightsHtml =\n    \"<ul>\" +\n    highlights\n      .map((item) => `<li>${escapeHtml(item)}</li>`)\n      .join(\"\") +\n    \"</ul>\";\n\n  const featuresHtml =\n    keyFeatures.length\n      ? \"<ul>\" +\n        keyFeatures\n          .map((item) => `<li>${escapeHtml(item)}</li>`)\n          .join(\"\") +\n        \"</ul>\"\n      : \"\";\n\n  const bodyHtml = [\n    \"<!-- ---- Product Highlights ---- -->\",\n    \"<h3>Product Highlights</h3>\",\n    highlightsHtml,\n    `<p>${escapeHtml(seoParagraph)}</p>`,\n    \"<!-- ----- Warranty ----- -->\",\n    \"<h3>Warranty</h3>\",\n    markdownToHtml(sections[\"Warranty\"]),\n    \"<!-- ---- Sizes Available ---- -->\",\n    \"<h3>Sizes Available</h3>\",\n    markdownToHtml(sections[\"Sizes Available\"]),\n    \"<!-- ---- Customisation Options ---- -->\",\n    \"<h3>Customisation Options</h3>\",\n    markdownToHtml(sections[\"Customisation Options\"]),\n    \"<!-- ----- Key Features ----- -->\",\n    \"<h3>Key Features</h3>\",\n    featuresHtml,\n    \"<!-- ---- Delivery Info ---- -->\",\n    \"<h3>Delivery Info</h3>\",\n    markdownToHtml(sections[\"Delivery Info\"]),\n    \"<!-- ---- Exclusions ---- -->\",\n    \"<h3>Exclusions</h3>\",\n    markdownToHtml(sections[\"Exclusions\"]),\n  ]\n    .filter((part) => part !== \"\")\n    .join(\"\\n\");\n\n  const generationWarnings = [];\n\n  if (!generated) {\n    generationWarnings.push(\"ai_content_missing_or_invalid\");\n  }\n\n  if (highlights.length !== 5) {\n    generationWarnings.push(\"product_highlights_must_equal_5\");\n  }\n\n  if (\n    wordCount(seoParagraph) < 80 ||\n    wordCount(seoParagraph) > 150\n  ) {\n    generationWarnings.push(\"seo_paragraph_word_count\");\n  }\n\n  if (\n    seoParagraph.length < 500 ||\n    seoParagraph.length > 1000\n  ) {\n    generationWarnings.push(\"seo_paragraph_character_count\");\n  }\n\n  if (\n    seoTitle.length < 30 ||\n    seoTitle.length > 60\n  ) {\n    generationWarnings.push(\"seo_title_length\");\n  }\n\n  if (\n    seoDescription.length < 100 ||\n    seoDescription.length > 155\n  ) {\n    generationWarnings.push(\"seo_description_length\");\n  }\n\n  if (title.length > 150) {\n    generationWarnings.push(\"title_length\");\n  }\n\n  if (\n    jackpotSelected.length !== 2 ||\n    jackpotSelected[0]?.toLowerCase() === jackpotSelected[1]?.toLowerCase()\n  ) {\n    generationWarnings.push(\"jackpot_selection_invalid\");\n  }\n\n  if (\n    !/^[A-Za-z]+$/.test(attributeExtraction)\n  ) {\n    generationWarnings.push(\"attribute_extraction_must_be_one_word\");\n  }\n\n  if (\n    topListSelected.length < 4\n  ) {\n    generationWarnings.push(\"top_list_selection_invalid\");\n  }\n\n  if (\n    handle.length > 60\n  ) {\n    generationWarnings.push(\"url_slug_length\");\n  }\n\n  if (\n    handle.length < 1 ||\n    handle.length > 60 ||\n    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(handle)\n  ) {\n    generationWarnings.push(\"handle_format\");\n  }\n\n  const copyForLeatherCheck = [\n    title,\n    ...highlights,\n    seoParagraph,\n    ...keyFeatures,\n    seoTitle,\n    seoDescription,\n  ].join(\" \");\n\n  if (hasForbiddenLeather(copyForLeatherCheck)) {\n    generationWarnings.push(\"forbidden_leather_wording\");\n  }\n\n  const missingControlledSections =\n    controlledSections.filter(\n      (name) => !sections[name]\n    );\n\n  if (\n    source.template_used &&\n    missingControlledSections.length\n  ) {\n    generationWarnings.push(\n      \"active_template_missing_controlled_sections\"\n    );\n  }\n\n  const needsReview =\n    Boolean(source.needs_review) ||\n    generationWarnings.length > 0;\n\n  const reviewReasons = [\n    ...(\n      Array.isArray(source.review_reasons)\n        ? source.review_reasons\n        : []\n    ),\n    ...generationWarnings,\n  ].filter(\n    (value, index, array) =>\n      array.indexOf(value) === index\n  );\n\n  output.push({\n    json: {\n      ...source,\n      handle,\n      url_slug: handle,\n      attribute_extraction: attributeExtraction,\n      jackpot_selected: jackpotSelected,\n      top_list_selected: topListSelected,\n      meta_title_top_terms: metaTitleTopTerms,\n      meta_description_extra_top_terms: metaDescriptionExtraTopTerms,\n      title,\n      body_html: bodyHtml,\n      type: category,\n      seo_title: seoTitle,\n      seo_description: seoDescription,\n      seo_paragraph: seoParagraph,\n      product_highlights: highlights,\n      key_features: keyFeatures,\n      vision_analysis:\n        source.visual_evidence ?? [],\n      template_sections_found:\n        controlledSections.filter(\n          (name) => Boolean(sections[name])\n        ),\n      template_sections_missing:\n        missingControlledSections,\n      generation_warnings:\n        generationWarnings,\n      needs_review: needsReview,\n      review_reasons: reviewReasons,\n    },\n  });\n}\n\nreturn output;"
+      }
+    },
+    {
+      "id": "ff62da34-100d-439b-af1a-9b9ba947f5a8",
+      "name": "Validate Product Output",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4660,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nconst allowedTypes = new Set([\n  \"Sofa\",\n  \"Sofa Bed\",\n  \"Recliner\",\n  \"Armchair\",\n  \"Dining Chair\",\n  \"Ottoman\",\n  \"Bench\",\n  \"Stool\",\n  \"Bed\",\n  \"Headboard\",\n  \"Kids Bed\",\n  \"Office Chair\",\n  \"Unclassified\",\n]);\n\nconst requiredComments = [\n  \"<!-- ---- Product Highlights ---- -->\",\n  \"<!-- ----- Warranty ----- -->\",\n  \"<!-- ---- Sizes Available ---- -->\",\n  \"<!-- ---- Customisation Options ---- -->\",\n  \"<!-- ----- Key Features ----- -->\",\n  \"<!-- ---- Delivery Info ---- -->\",\n  \"<!-- ---- Exclusions ---- -->\",\n];\n\nconst unsupportedClaimPatterns = [\n  [\"premium_quality\", /\\bpremium\\s+quality\\b/i],\n  [\"luxury_quality\", /\\bluxury\\s+quality\\b/i],\n  [\"ergonomic\", /\\bergonomic\\b/i],\n  [\"orthopaedic\", /\\borthopaedic\\b|\\borthopedic\\b/i],\n  [\"durable\", /\\bdurable\\b/i],\n  [\"long_lasting\", /\\blong[-\\s]?lasting\\b/i],\n  [\"stain_resistant\", /\\bstain[-\\s]?resistant\\b/i],\n  [\"water_resistant\", /\\bwater[-\\s]?resistant\\b/i],\n  [\"scratch_resistant\", /\\bscratch[-\\s]?resistant\\b/i],\n  [\"pet_friendly\", /\\bpet[-\\s]?friendly\\b/i],\n  [\"child_safe\", /\\bchild[-\\s]?safe\\b/i],\n  [\"eco_friendly\", /\\beco[-\\s]?friendly\\b/i],\n  [\"sustainable\", /\\bsustainable\\b/i],\n  [\"imported\", /\\bimported\\b/i],\n  [\"handcrafted\", /\\bhandcrafted\\b/i],\n  [\"certified\", /\\bcertified\\b/i],\n  [\"fire_resistant\", /\\bfire[-\\s]?resistant\\b/i],\n  [\"anti_microbial\", /\\banti[-\\s]?microbial\\b|\\bantimicrobial\\b/i],\n  [\"high_density_foam\", /\\bhigh[-\\s]?density\\s+foam\\b/i],\n  [\"solid_wood\", /\\bsolid\\s+wood\\b/i],\n  [\"hardwood_frame\", /\\bhardwood\\s+frame\\b/i],\n];\n\nfunction addError(errors, code) {\n  if (!errors.includes(code)) {\n    errors.push(code);\n  }\n}\n\nfunction normalize(value) {\n  return String(value ?? \"\").trim();\n}\n\nfunction phraseIncluded(text, phrase) {\n  return normalize(text).toLowerCase().includes(\n    normalize(phrase).toLowerCase()\n  );\n}\n\nfunction distinctCaseInsensitive(values) {\n  const normalized = values.map((value) =>\n    normalize(value).toLowerCase()\n  );\n  return new Set(normalized).size === normalized.length;\n}\n\nfunction wordCount(value) {\n  const text = normalize(value);\n  return text ? text.split(/\\s+/).length : 0;\n}\n\nfunction arrayOfStrings(value) {\n  return Array.isArray(value) &&\n    value.every(\n      (entry) =>\n        typeof entry === \"string\" &&\n        entry.trim().length > 0\n    );\n}\n\nfunction uniqueNormalized(values) {\n  const seen = new Set();\n\n  for (const value of values) {\n    const normalized = String(value)\n      .toLowerCase()\n      .replace(/\\s+/g, \" \")\n      .trim();\n\n    if (seen.has(normalized)) {\n      return false;\n    }\n\n    seen.add(normalized);\n  }\n\n  return true;\n}\n\nfunction countOccurrences(text, needle) {\n  if (!needle) return 0;\n\n  let count = 0;\n  let position = 0;\n\n  while (true) {\n    const index = text.indexOf(needle, position);\n\n    if (index === -1) {\n      break;\n    }\n\n    count++;\n    position = index + needle.length;\n  }\n\n  return count;\n}\n\nfunction escapeHtml(value) {\n  return String(value ?? \"\")\n    .replace(/&/g, \"&amp;\")\n    .replace(/</g, \"&lt;\")\n    .replace(/>/g, \"&gt;\")\n    .replace(/\"/g, \"&quot;\")\n    .replace(/'/g, \"&#39;\");\n}\n\nfunction containsForbiddenLeatherWord(value) {\n  const matches =\n    String(value ?? \"\").match(/[A-Za-z-]*leather[A-Za-z-]*/gi) ?? [];\n\n  return matches.some(\n    (word) =>\n      word.toLowerCase() !== \"leatherette\"\n  );\n}\n\nfunction containsAnyLeatherWord(value) {\n  return /leather/i.test(String(value ?? \"\"));\n}\n\nfunction exactSetMatch(a, b) {\n  if (a.length !== b.length) {\n    return false;\n  }\n\n  const left = a\n    .map((value) =>\n      String(value)\n        .toLowerCase()\n        .replace(/\\s+/g, \" \")\n        .trim()\n    )\n    .sort();\n\n  const right = b\n    .map((value) =>\n      String(value)\n        .toLowerCase()\n        .replace(/\\s+/g, \" \")\n        .trim()\n    )\n    .sort();\n\n  return left.every(\n    (value, index) =>\n      value === right[index]\n  );\n}\n\nconst handleCounts = new Map();\n\nfor (const item of items) {\n  const handle = normalize(item.json?.handle);\n\n  if (handle) {\n    handleCounts.set(\n      handle,\n      (handleCounts.get(handle) ?? 0) + 1\n    );\n  }\n}\n\nreturn items.map((item) => {\n  const row = item.json ?? {};\n  const errors = [];\n\n  const productName =\n    normalize(row.product_name);\n\n  const category =\n    allowedTypes.has(row.category)\n      ? row.category\n      : \"Unclassified\";\n\n  const expectedTitle =\n    `${productName} ${category} Custom Crafted to Order`\n      .replace(/\\s+/g, \" \")\n      .trim();\n\n  const handle =\n    normalize(row.handle);\n\n  const title =\n    normalize(row.title);\n\n  const bodyHtml =\n    String(row.body_html ?? \"\");\n\n  const seoTitle =\n    normalize(row.seo_title);\n\n  const seoDescription =\n    normalize(row.seo_description);\n\n  const seoParagraph =\n    normalize(row.seo_paragraph);\n\n  const highlights =\n    Array.isArray(row.product_highlights)\n      ? row.product_highlights\n      : [];\n\n  const keyFeatures =\n    Array.isArray(row.key_features)\n      ? row.key_features\n      : [];\n\n  const attributeExtraction =\n    normalize(row.attribute_extraction);\n\n  const jackpotSelected =\n    Array.isArray(row.jackpot_selected)\n      ? row.jackpot_selected.map(normalize).filter(Boolean)\n      : [];\n\n  const topListSelected =\n    Array.isArray(row.top_list_selected)\n      ? row.top_list_selected.map(normalize).filter(Boolean)\n      : [];\n\n  const metaTitleTopTerms =\n    Array.isArray(row.meta_title_top_terms)\n      ? row.meta_title_top_terms.map(normalize).filter(Boolean)\n      : [];\n\n  const metaDescriptionExtraTopTerms =\n    Array.isArray(row.meta_description_extra_top_terms)\n      ? row.meta_description_extra_top_terms.map(normalize).filter(Boolean)\n      : [];\n\n  const sofaConfiguration = normalize(row.sofa_configuration);\n  const sofaConfigurationConfidence = Math.max(0, Math.min(100, Number(row.sofa_configuration_confidence ?? 0) || 0));\n  const productConfiguration = normalize(row.product_configuration);\n  const productConfigurationConfidence = Math.max(0, Math.min(100, Number(row.product_configuration_confidence ?? 0) || 0));\n\n  if (!productName) {\n    addError(\n      errors,\n      \"product_name_missing\"\n    );\n  }\n\n  const expectedSeoHandle = String([\n    jackpotSelected[0] ?? \"\",\n    category,\n    attributeExtraction,\n    productName,\n    jackpotSelected[1] ?? \"\",\n  ].filter(Boolean).join(\"-\"))\n    .normalize(\"NFKD\")\n    .replace(/[\\u0300-\\u036f]/g, \"\")\n    .toLowerCase()\n    .replace(/[^a-z0-9]+/g, \"-\")\n    .replace(/^-+|-+$/g, \"\")\n    .replace(/-+/g, \"-\");\n\n  if (\n    jackpotSelected.length !== 2 ||\n    !distinctCaseInsensitive(jackpotSelected)\n  ) {\n    addError(errors, \"jackpot_selection_invalid\");\n  }\n\n  const productNameLower = productName.toLowerCase();\n  const categoryLower = category.toLowerCase();\n\n  if (\n    jackpotSelected.some((term) => {\n      const lower = term.toLowerCase();\n      return (\n        lower.includes(categoryLower) ||\n        (productNameLower && lower.includes(productNameLower))\n      );\n    })\n  ) {\n    addError(errors, \"jackpot_contains_product_word_or_title\");\n  }\n\n  if (\n    topListSelected.some((term) =>\n      jackpotSelected.some(\n        (jackpot) =>\n          term.toLowerCase() === jackpot.toLowerCase()\n      )\n    )\n  ) {\n    addError(errors, \"top_list_duplicates_jackpot\");\n  }\n\n  if (\n    !attributeExtraction ||\n    !/^[A-Za-z]+$/.test(attributeExtraction)\n  ) {\n    addError(errors, \"attribute_extraction_invalid\");\n  }\n\n  if (\n    topListSelected.length < 4 ||\n    !distinctCaseInsensitive(topListSelected)\n  ) {\n    addError(errors, \"top_list_selection_invalid\");\n  }\n\n  if (handle !== expectedSeoHandle) {\n    addError(errors, \"url_slug_formula_mismatch\");\n  }\n\n  if (\n    metaTitleTopTerms.length < 1 ||\n    metaTitleTopTerms.length > 2 ||\n    !distinctCaseInsensitive(metaTitleTopTerms) ||\n    !metaTitleTopTerms.every((term) =>\n      topListSelected.some(\n        (candidate) =>\n          candidate.toLowerCase() === term.toLowerCase()\n      )\n    ) ||\n    metaTitleTopTerms.some((term) =>\n      jackpotSelected.some(\n        (jackpot) =>\n          jackpot.toLowerCase() === term.toLowerCase()\n      )\n    )\n  ) {\n    addError(errors, \"meta_title_top_terms_invalid\");\n  }\n\n  if (\n    metaDescriptionExtraTopTerms.length < 1 ||\n    metaDescriptionExtraTopTerms.length > 2 ||\n    !distinctCaseInsensitive(metaDescriptionExtraTopTerms) ||\n    !metaDescriptionExtraTopTerms.every((term) =>\n      topListSelected.some(\n        (candidate) =>\n          candidate.toLowerCase() === term.toLowerCase()\n      )\n    ) ||\n    metaDescriptionExtraTopTerms.some((term) =>\n      metaTitleTopTerms.some(\n        (used) =>\n          used.toLowerCase() === term.toLowerCase()\n      ) ||\n      jackpotSelected.some(\n        (jackpot) =>\n          jackpot.toLowerCase() === term.toLowerCase()\n      )\n    )\n  ) {\n    addError(errors, \"meta_description_extra_terms_invalid\");\n  }\n\n  if (\n    jackpotSelected.some(\n      (term) => !phraseIncluded(seoTitle, term)\n    ) ||\n    metaTitleTopTerms.some(\n      (term) => !phraseIncluded(seoTitle, term)\n    )\n  ) {\n    addError(errors, \"meta_title_required_terms_missing\");\n  }\n\n  if (\n    jackpotSelected.some(\n      (term) => !phraseIncluded(seoDescription, term)\n    ) ||\n    metaTitleTopTerms.some(\n      (term) => !phraseIncluded(seoDescription, term)\n    ) ||\n    metaDescriptionExtraTopTerms.some(\n      (term) => !phraseIncluded(seoDescription, term)\n    )\n  ) {\n    addError(errors, \"meta_description_required_terms_missing\");\n  }\n\n  if (\n    !handle ||\n    handle.length > 60 ||\n    !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(handle)\n  ) {\n    addError(\n      errors,\n      \"handle_invalid\"\n    );\n  }\n\n  if (\n    handle &&\n    (handleCounts.get(handle) ?? 0) > 1\n  ) {\n    addError(\n      errors,\n      \"handle_not_unique_within_job\"\n    );\n  }\n\n  if (title !== expectedTitle) {\n    addError(\n      errors,\n      \"title_formula_mismatch\"\n    );\n  }\n\n  if (title.length > 150) {\n    addError(\n      errors,\n      \"title_exceeds_150_characters\"\n    );\n  }\n\n  if (\n    !allowedTypes.has(row.type) ||\n    row.type !== category\n  ) {\n    addError(\n      errors,\n      \"type_invalid_or_mismatched\"\n    );\n  }\n\n  const confidence =\n    Number(row.category_confidence);\n\n  if (\n    !Number.isFinite(confidence) ||\n    confidence < 0 ||\n    confidence > 100\n  ) {\n    addError(\n      errors,\n      \"category_confidence_invalid\"\n    );\n  }\n\n  if (\n    category === \"Unclassified\" &&\n    !row.needs_review\n  ) {\n    addError(\n      errors,\n      \"unclassified_must_need_review\"\n    );\n  }\n\n  if (\n    Number.isFinite(confidence) &&\n    confidence < 70 &&\n    !row.needs_review\n  ) {\n    addError(\n      errors,\n      \"low_confidence_must_need_review\"\n    );\n  }\n\n  if (\n    !arrayOfStrings(highlights) ||\n    highlights.length !== 5\n  ) {\n    addError(\n      errors,\n      \"product_highlights_must_equal_5\"\n    );\n  } else if (\n    !uniqueNormalized(highlights)\n  ) {\n    addError(\n      errors,\n      \"product_highlights_not_distinct\"\n    );\n  }\n\n  if (\n    keyFeatures.length > 0 &&\n    !arrayOfStrings(keyFeatures)\n  ) {\n    addError(\n      errors,\n      \"key_features_invalid\"\n    );\n  }\n\n  if (\n    highlights.length > 0 &&\n    keyFeatures.length > 0 &&\n    exactSetMatch(\n      highlights,\n      keyFeatures\n    )\n  ) {\n    addError(\n      errors,\n      \"key_features_duplicate_all_highlights\"\n    );\n  }\n\n  const paragraphWords =\n    wordCount(seoParagraph);\n\n  if (\n    paragraphWords < 80 ||\n    paragraphWords > 150\n  ) {\n    addError(\n      errors,\n      \"seo_paragraph_word_count\"\n    );\n  }\n\n  if (\n    seoParagraph.length < 500 ||\n    seoParagraph.length > 1000\n  ) {\n    addError(\n      errors,\n      \"seo_paragraph_character_count\"\n    );\n  }\n\n  if (\n    seoTitle.length < 30 ||\n    seoTitle.length > 60\n  ) {\n    addError(\n      errors,\n      \"seo_title_length\"\n    );\n  }\n\n  if (\n    seoDescription.length < 100 ||\n    seoDescription.length > 155\n  ) {\n    addError(\n      errors,\n      \"seo_description_length\"\n    );\n  }\n\n  if (category === \"Sofa\") {\n    const specificConfigPattern = /\\b(?:[1-4]\\s*seater\\s+sofa|sectional\\s+sofa|l[\\s-]?shaped\\s+sofa|sofa\\s+with\\s+lounger|corner\\s+sofa)\\b/i;\n    const reliableConfig = sofaConfiguration && sofaConfiguration !== \"unknown\" && sofaConfiguration !== \"not_applicable\" && sofaConfigurationConfidence >= 75;\n\n    if (!reliableConfig && specificConfigPattern.test(seoDescription)) {\n      addError(errors, \"seo_description_unverified_sofa_configuration\");\n    }\n\n    if (\n      reliableConfig &&\n      sofaConfiguration !== \"sofa set\" &&\n      !phraseIncluded(seoDescription, sofaConfiguration)\n    ) {\n      addError(errors, \"seo_description_confirmed_sofa_configuration_missing\");\n    }\n  }\n\n  const reliableProductConfiguration = productConfiguration && productConfiguration.toLowerCase() !== \"unknown\" && productConfigurationConfidence >= 75;\n\n  const riskyConfigurationPatterns = [\n    /\\b(?:single|double|queen|king)\\s+(?:size\\s+)?bed\\b/i,\n    /\\b(?:[1-4]\\s*seater)\\b/i,\n    /\\b(?:sectional|l[\\s-]?shaped|corner)\\s+sofa\\b/i,\n    /\\bsofa\\s+with\\s+lounger\\b/i,\n    /\\bstorage\\s+(?:bed|ottoman|bench)\\b/i,\n    /\\b(?:bunk|loft|canopy|house)\\s+bed\\b/i,\n    /\\b(?:recliner|reclining)\\s+(?:chair|sofa)\\b/i,\n    /\\bswivel\\s+(?:chair|office\\s+chair)\\b/i,\n  ];\n\n  if (!reliableProductConfiguration && riskyConfigurationPatterns.some((pattern) => pattern.test(seoDescription))) {\n    addError(errors, \"seo_description_unverified_product_configuration\");\n  }\n\n  if (\n    reliableProductConfiguration &&\n    category !== \"Sofa\" &&\n    !phraseIncluded(seoDescription, productConfiguration)\n  ) {\n    addError(errors, \"seo_description_confirmed_product_configuration_missing\");\n  }\n\n  const generatedCopy = [\n    title,\n    ...highlights,\n    seoParagraph,\n    ...keyFeatures,\n    seoTitle,\n    seoDescription,\n  ].join(\" \");\n\n  if (\n    containsAnyLeatherWord(\n      generatedCopy\n    )\n  ) {\n    addError(\n      errors,\n      \"generated_copy_contains_unverified_leather_wording\"\n    );\n  }\n\n  if (\n    containsForbiddenLeatherWord(\n      row.template_content_md\n    ) ||\n    containsForbiddenLeatherWord(\n      bodyHtml\n    )\n  ) {\n    addError(\n      errors,\n      \"forbidden_leather_wording\"\n    );\n  }\n\n  for (\n    const [claim, pattern]\n    of unsupportedClaimPatterns\n  ) {\n    if (pattern.test(generatedCopy)) {\n      addError(\n        errors,\n        `unsupported_claim_${claim}`\n      );\n    }\n  }\n\n  if (\n    /\\b\\d+(?:\\.\\d+)?\\s*(?:mm|cm|metres?|meters?|inches?|inch|ft|feet)\\b/i.test(\n      generatedCopy\n    ) ||\n    /\\b\\d+(?:\\.\\d+)?\\s*[\"”]\\b/.test(\n      generatedCopy\n    )\n  ) {\n    addError(\n      errors,\n      \"unsupported_measurement_claim\"\n    );\n  }\n\n  if (\n    Boolean(row.template_missing) ||\n    !Boolean(row.template_used)\n  ) {\n    addError(\n      errors,\n      \"category_template_missing\"\n    );\n  }\n\n  if (\n    row.template_used &&\n    (\n      !row.template_id ||\n      !Number.isInteger(\n        Number(row.template_version)\n      ) ||\n      !normalize(\n        row.template_content_md\n      )\n    )\n  ) {\n    addError(\n      errors,\n      \"template_metadata_invalid\"\n    );\n  }\n\n  if (\n    row.template_used &&\n    Array.isArray(\n      row.template_sections_missing\n    ) &&\n    row.template_sections_missing.length > 0\n  ) {\n    addError(\n      errors,\n      \"controlled_template_section_missing\"\n    );\n  }\n\n  const comments =\n    bodyHtml.match(\n      /<!--(?:.|\\n|\\r)*?-->/g\n    ) ?? [];\n\n  if (\n    comments.length !==\n      requiredComments.length ||\n    !requiredComments.every(\n      (comment, index) =>\n        comments[index] === comment\n    )\n  ) {\n    addError(\n      errors,\n      \"body_section_comments_invalid_or_out_of_order\"\n    );\n  }\n\n  for (const comment of requiredComments) {\n    if (\n      countOccurrences(\n        bodyHtml,\n        comment\n      ) !== 1\n    ) {\n      addError(\n        errors,\n        \"body_section_comment_count_invalid\"\n      );\n      break;\n    }\n  }\n\n  const escapedParagraph =\n    escapeHtml(seoParagraph);\n\n  const paragraphBeforeWarranty =\n    `<p>${escapedParagraph}</p>\\n<!-- ----- Warranty ----- -->`;\n\n  if (\n    !bodyHtml.includes(\n      paragraphBeforeWarranty\n    )\n  ) {\n    addError(\n      errors,\n      \"seo_paragraph_not_immediately_before_warranty\"\n    );\n  }\n\n  if (\n    /<!--[^>]*\\bcare\\b[^>]*-->/i.test(\n      bodyHtml\n    ) ||\n    /<h[1-6][^>]*>\\s*care\\b/i.test(\n      bodyHtml\n    )\n  ) {\n    addError(\n      errors,\n      \"care_section_forbidden\"\n    );\n  }\n\n  const expectedHeadings = [\n    \"Product Highlights\",\n    \"Warranty\",\n    \"Sizes Available\",\n    \"Customisation Options\",\n    \"Key Features\",\n    \"Delivery Info\",\n    \"Exclusions\",\n  ];\n\n  const headingMatches = [\n    ...bodyHtml.matchAll(\n      /<h3[^>]*>(.*?)<\\/h3>/gi\n    ),\n  ].map((match) =>\n    String(match[1])\n      .replace(/<[^>]*>/g, \"\")\n      .trim()\n  );\n\n  if (\n    headingMatches.length !==\n      expectedHeadings.length ||\n    !expectedHeadings.every(\n      (heading, index) =>\n        headingMatches[index] === heading\n    )\n  ) {\n    addError(\n      errors,\n      \"body_headings_invalid_or_out_of_order\"\n    );\n  }\n\n  const priorWarnings =\n    Array.isArray(\n      row.generation_warnings\n    )\n      ? row.generation_warnings\n      : [];\n\n  for (const warning of priorWarnings) {\n    addError(\n      errors,\n      `generation_warning:${warning}`\n    );\n  }\n\n  const validationPassed =\n    errors.length === 0;\n\n  const needsReview =\n    Boolean(row.needs_review) ||\n    !validationPassed;\n\n  const reviewReasons = [\n    ...(\n      Array.isArray(\n        row.review_reasons\n      )\n        ? row.review_reasons\n        : []\n    ),\n    ...errors,\n  ].filter(\n    (value, index, array) =>\n      array.indexOf(value) === index\n  );\n\n  return {\n    json: {\n      ...row,\n      validation_passed:\n        validationPassed,\n      validation_errors:\n        errors,\n      needs_review:\n        needsReview,\n      review_reasons:\n        reviewReasons,\n      validation_summary: {\n        error_count:\n          errors.length,\n        handle_valid:\n          !errors.includes(\n            \"handle_invalid\"\n          ) &&\n          !errors.includes(\n            \"handle_not_unique_within_job\"\n          ),\n        title_valid:\n          !errors.includes(\n            \"title_formula_mismatch\"\n          ) &&\n          !errors.includes(\n            \"title_exceeds_150_characters\"\n          ),\n        body_valid:\n          !errors.some(\n            (error) =>\n              error.startsWith(\n                \"body_\"\n              ) ||\n              error ===\n                \"seo_paragraph_not_immediately_before_warranty\" ||\n              error ===\n                \"care_section_forbidden\"\n          ),\n        seo_valid:\n          !errors.some(\n            (error) =>\n              error.startsWith(\n                \"seo_\"\n              )\n          ),\n        template_valid:\n          !errors.some(\n            (error) =>\n              error.includes(\n                \"template\"\n              )\n          ),\n      },\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "3445769f-91c4-4f79-8227-ac19a13b1aef",
+      "name": "Prepare Product Rows",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        4920,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const items = $input.all();\n\nreturn items.map((item) => {\n  const row = item.json ?? {};\n\n  const validationPassed =\n    Boolean(row.validation_passed);\n\n  const needsReview =\n    Boolean(row.needs_review);\n\n  const status =\n    validationPassed && !needsReview\n      ? \"approved\"\n      : \"review\";\n\n  return {\n    json: {\n      organization_id:\n        row.organization_id,\n      job_id:\n        row.id,\n      folder_name:\n        row.first_level_folder ??\n        row.product_folder ??\n        row.product_name,\n      product_name:\n        row.product_name,\n      category:\n        row.category,\n      category_confidence:\n        Number.isFinite(\n          Number(row.category_confidence)\n        )\n          ? Number(row.category_confidence)\n          : null,\n      status,\n      needs_review:\n        needsReview,\n      validation_passed:\n        validationPassed,\n      template_id:\n        row.template_id ?? null,\n      template_version:\n        row.template_version ?? null,\n      template_missing:\n        Boolean(row.template_missing),\n      handle:\n        row.handle ?? null,\n      title:\n        row.title ?? null,\n      body_html:\n        row.body_html ?? null,\n      type:\n        row.type ?? null,\n      seo_title:\n        row.seo_title ?? null,\n      seo_description:\n        row.seo_description ?? null,\n      seo_paragraph:\n        row.seo_paragraph ?? null,\n      product_highlights:\n        Array.isArray(\n          row.product_highlights\n        )\n          ? row.product_highlights\n          : [],\n      key_features:\n        Array.isArray(\n          row.key_features\n        )\n          ? row.key_features\n          : [],\n      vision_analysis:\n        row.vision_analysis ?? [],\n      validation_errors:\n        Array.isArray(\n          row.validation_errors\n        )\n          ? row.validation_errors\n          : [],\n      qc_issues:\n        Array.isArray(\n          row.review_reasons\n        )\n          ? row.review_reasons\n          : [],\n      image_count:\n        Math.max(\n          0,\n          Number(\n            row.selected_image_count ?? 0\n          ) || 0\n        ),\n    },\n  };\n});"
+      }
+    },
+    {
+      "id": "54f94733-24ea-4c38-866d-8cfefe5df801",
+      "name": "Upsert Catalogue Products",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        5180,
+        500
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://gislynuuhjbvfjqosgtp.supabase.co/rest/v1/catalogue_products",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendQuery": true,
+        "specifyQuery": "keypair",
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "on_conflict",
+              "value": "organization_id,job_id,folder_name"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "specifyHeaders": "keypair",
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Prefer",
+              "value": "resolution=merge-duplicates,return=representation"
+            }
+          ]
+        },
+        "sendBody": true,
+        "contentType": "json",
+        "specifyBody": "json",
+        "jsonBody": "={{ $input.all().map(item => item.json) }}",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          },
+          "timeout": 120000
+        }
+      },
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "eLsnZR9V0lYs1FAe",
+          "name": "Catalogue Studio Supabase"
+        }
+      }
+    },
+    {
+      "id": "7e6a0dc4-e37c-43ec-8e7a-c8f3ce2540bd",
+      "name": "Summarize Catalogue Job",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5440,
+        500
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const rows = $(\"Prepare Product Rows\").all().map((item) => item.json ?? {});\n\nconst jobId = $(\"Normalize Request\").first().json.job_id;\nconst organizationId = $(\"Normalize Request\").first().json.organization_id;\n\nconst totalProducts = rows.length;\nconst approvedProducts = rows.filter((row) => row.status === \"approved\").length;\nconst reviewProducts = rows.filter((row) => row.status === \"review\").length;\nconst failedProducts = rows.filter((row) => row.status === \"failed\").length;\nconst processedProducts = approvedProducts + reviewProducts + failedProducts;\n\nconst hasReview = reviewProducts > 0 || failedProducts > 0;\nconst finalStatus = hasReview ? \"review\" : \"completed\";\nconst currentStage = hasReview ? \"review_required\" : \"completed\";\n\nreturn [{\n  json: {\n    job_id: jobId,\n    organization_id: organizationId,\n    total_products: totalProducts,\n    processed_products: processedProducts,\n    approved_products: approvedProducts,\n    review_products: reviewProducts,\n    failed_products: failedProducts,\n    status: finalStatus,\n    current_stage: currentStage,\n    progress: 100,\n    completed_at: new Date().toISOString(),\n  },\n}];"
+      }
+    },
+    {
+      "id": "76cf5799-b63c-404d-aa59-3ef2a5d918f2",
+      "name": "Finalize Catalogue Job",
+      "type": "n8n-nodes-base.supabase",
+      "typeVersion": 1,
+      "position": [
+        5700,
+        500
+      ],
+      "parameters": {
+        "resource": "row",
+        "operation": "update",
+        "useCustomSchema": false,
+        "tableId": "catalogue_jobs",
+        "filterType": "manual",
+        "matchType": "allFilters",
+        "filters": {
+          "conditions": [
+            {
+              "keyName": "id",
+              "condition": "eq",
+              "keyValue": "={{ $json.job_id }}"
+            },
+            {
+              "keyName": "organization_id",
+              "condition": "eq",
+              "keyValue": "={{ $json.organization_id }}"
+            }
+          ]
+        },
+        "dataToSend": "defineBelow",
+        "fieldsUi": {
+          "fieldValues": [
+            {
+              "fieldId": "total_products",
+              "fieldValue": "={{ $json.total_products }}"
+            },
+            {
+              "fieldId": "processed_products",
+              "fieldValue": "={{ $json.processed_products }}"
+            },
+            {
+              "fieldId": "approved_products",
+              "fieldValue": "={{ $json.approved_products }}"
+            },
+            {
+              "fieldId": "review_products",
+              "fieldValue": "={{ $json.review_products }}"
+            },
+            {
+              "fieldId": "failed_products",
+              "fieldValue": "={{ $json.failed_products }}"
+            },
+            {
+              "fieldId": "status",
+              "fieldValue": "={{ $json.status }}"
+            },
+            {
+              "fieldId": "current_stage",
+              "fieldValue": "={{ $json.current_stage }}"
+            },
+            {
+              "fieldId": "progress",
+              "fieldValue": "={{ $json.progress }}"
+            },
+            {
+              "fieldId": "completed_at",
+              "fieldValue": "={{ $json.completed_at }}"
+            }
+          ]
+        }
+      },
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000,
+      "credentials": {
+        "supabaseApi": {
+          "id": "eLsnZR9V0lYs1FAe",
+          "name": "Catalogue Studio Supabase"
+        }
+      }
+    },
+    {
+      "id": "04aa0f96-2b7c-49aa-9a28-05e28f90fc5b",
+      "name": "Extract SEO Signals from Image Analysis",
+      "type": "@n8n/n8n-nodes-langchain.openAi",
+      "typeVersion": 2.3,
+      "position": [
+        3560,
+        260
+      ],
+      "parameters": {
+        "resource": "text",
+        "operation": "response",
+        "modelId": {
+          "__rl": true,
+          "mode": "id",
+          "value": "gpt-5.6-luna"
+        },
+        "responses": {
+          "values": [
+            {
+              "type": "text",
+              "role": "user",
+              "content": "={{ \"Extract SEO signals ONLY from the already-completed product image analysis. Do not generate product copy. Product_Title_Input: \" + $json.product_name + \". PRODUCT_WORD: \" + $json.category + \". Image-analysis evidence: \" + JSON.stringify($json.visual_evidence) + \". Return only structured JSON. attribute_extraction: exactly ONE descriptive word visibly supported by the product images. jackpot_selected: exactly TWO short, distinct product-relevant keyword phrases supported by the image-analysis evidence. STRICT JACKPOT RULES: neither JACKPOT phrase may contain PRODUCT_WORD/category; neither may contain Product_Title_Input; the two JACKPOT phrases must not duplicate each other; keep them short enough for the final slug. top_list_selected: 4-6 distinct product-relevant terms supported by image-analysis evidence. TOP LIST MUST NOT repeat either JACKPOT phrase exactly and should add different product attributes/details. meta_title_top_terms: choose exactly 1-2 terms from top_list_selected that best summarise the product; they must be different from both JACKPOT phrases. meta_description_extra_top_terms: choose exactly 1-2 additional distinct terms from top_list_selected that are NOT in meta_title_top_terms and are NOT either JACKPOT phrase. sofa_configuration: for PRODUCT_WORD Sofa, inspect ALL image-analysis evidence and choose exactly one of: 1 seater sofa, 2 seater sofa, 3 seater sofa, 4 seater sofa, sectional sofa, L shaped sofa, sofa with lounger, corner sofa, sofa set, unknown. For non-Sofa categories use not_applicable. sofa_configuration_confidence: integer 0-100. Use a numbered/structural configuration only when the visible full product form supports it consistently across images. Do NOT infer seat count from seat seams, channels, cushion divisions, or styling alone. If there is any material doubt, return unknown with confidence below 75. product_configuration: for EVERY PRODUCT_WORD, inspect ALL image-analysis evidence and return one short, search-useful subtype/configuration only when the full visible product form supports it consistently; otherwise return unknown. Do not simply repeat PRODUCT_WORD. product_configuration_confidence: integer 0-100. Never infer bed size (Single/Double/Queen/King), seat count, storage, reclining, conversion, swivel, mechanism, orientation, or hidden function unless visibly demonstrated. For Sofa, product_configuration should agree with sofa_configuration when sofa_configuration is confidently known. These selections are the only source for the URL Slug, Meta Title and Meta Description. The deterministic slug formula is JACKPOT[0] + PRODUCT_WORD + attribute_extraction + Product_Title_Input + JACKPOT[1], lowercase and hyphen-separated, so choose terms that make the final slug <=60 characters. Never use filenames, folder names, external keyword tools, search-volume claims, hidden specifications, unsupported materials, or unsupported claims as evidence.\" }}"
+            }
+          ]
+        },
+        "simplify": true,
+        "options": {
+          "maxTokens": 900,
+          "store": false,
+          "textFormat": {
+            "textOptions": {
+              "type": "json_schema",
+              "verbosity": "low",
+              "name": "catalogue_image_seo_signals",
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "attribute_extraction",
+                  "jackpot_selected",
+                  "top_list_selected",
+                  "meta_title_top_terms",
+                  "meta_description_extra_top_terms",
+                  "sofa_configuration",
+                  "sofa_configuration_confidence",
+                  "product_configuration",
+                  "product_configuration_confidence"
+                ],
+                "properties": {
+                  "attribute_extraction": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 18,
+                    "pattern": "^[A-Za-z]+$"
+                  },
+                  "jackpot_selected": {
+                    "type": "array",
+                    "minItems": 2,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 18
+                    }
+                  },
+                  "top_list_selected": {
+                    "type": "array",
+                    "minItems": 4,
+                    "maxItems": 6,
+                    "items": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 28
+                    }
+                  },
+                  "meta_title_top_terms": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 28
+                    }
+                  },
+                  "meta_description_extra_top_terms": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 2,
+                    "items": {
+                      "type": "string",
+                      "minLength": 2,
+                      "maxLength": 28
+                    }
+                  },
+                  "sofa_configuration": {
+                    "type": "string",
+                    "enum": [
+                      "1 seater sofa",
+                      "2 seater sofa",
+                      "3 seater sofa",
+                      "4 seater sofa",
+                      "sectional sofa",
+                      "L shaped sofa",
+                      "sofa with lounger",
+                      "corner sofa",
+                      "sofa set",
+                      "unknown",
+                      "not_applicable"
+                    ]
+                  },
+                  "sofa_configuration_confidence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  },
+                  "product_configuration": {
+                    "type": "string",
+                    "minLength": 2,
+                    "maxLength": 48
+                  },
+                  "product_configuration_confidence": {
+                    "type": "integer",
+                    "minimum": 0,
+                    "maximum": 100
+                  }
+                }
+              },
+              "description": "SEO selections derived strictly from product image-analysis evidence",
+              "strict": true
+            }
+          }
+        }
+      },
+      "onError": "stopWorkflow",
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 2000
+    },
+    {
+      "id": "283b0646-9530-4779-9f7c-2ada54597c12",
+      "name": "Normalize SEO Image Signals",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3820,
+        260
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "language": "javaScript",
+        "jsCode": "const aiItems = $input.all();\nconst sourceItems = $(\"Normalize Category Result\").all();\n\nfunction parseSeoSignals(value) {\n  const visited = new Set();\n\n  function walk(node) {\n    if (node === null || node === undefined) return null;\n\n    if (typeof node === \"string\") {\n      const cleaned = node\n        .replace(/^\\s*```(?:json)?/i, \"\")\n        .replace(/```\\s*$/i, \"\")\n        .trim();\n\n      try {\n        return walk(JSON.parse(cleaned));\n      } catch {\n        return null;\n      }\n    }\n\n    if (typeof node !== \"object\") return null;\n    if (visited.has(node)) return null;\n    visited.add(node);\n\n    if (\n      typeof node.attribute_extraction === \"string\" &&\n      Array.isArray(node.jackpot_selected) &&\n      Array.isArray(node.top_list_selected)\n    ) {\n      return node;\n    }\n\n    if (Array.isArray(node)) {\n      for (const entry of node) {\n        const found = walk(entry);\n        if (found) return found;\n      }\n      return null;\n    }\n\n    for (const child of Object.values(node)) {\n      const found = walk(child);\n      if (found) return found;\n    }\n\n    return null;\n  }\n\n  return walk(value);\n}\n\nreturn aiItems.map((item, index) => {\n  const source = sourceItems[index]?.json ?? {};\n  const parsed = parseSeoSignals(item.json ?? {});\n\n  return {\n    json: {\n      ...source,\n      attribute_extraction: String(parsed?.attribute_extraction ?? \"\").trim(),\n      jackpot_selected: Array.isArray(parsed?.jackpot_selected)\n        ? parsed.jackpot_selected.map(v => String(v ?? \"\").trim()).filter(Boolean).slice(0, 2)\n        : [],\n      top_list_selected: Array.isArray(parsed?.top_list_selected)\n        ? parsed.top_list_selected.map(v => String(v ?? \"\").trim()).filter(Boolean).slice(0, 6)\n        : [],\n      meta_title_top_terms: Array.isArray(parsed?.meta_title_top_terms)\n        ? parsed.meta_title_top_terms.map(v => String(v ?? \"\").trim()).filter(Boolean).slice(0, 2)\n        : [],\n      meta_description_extra_top_terms: Array.isArray(parsed?.meta_description_extra_top_terms)\n        ? parsed.meta_description_extra_top_terms.map(v => String(v ?? \"\").trim()).filter(Boolean).slice(0, 2)\n        : [],\n      sofa_configuration: String(parsed?.sofa_configuration ?? (source.category === \"Sofa\" ? \"unknown\" : \"not_applicable\")).trim(),\n      sofa_configuration_confidence: Math.max(0, Math.min(100, Number(parsed?.sofa_configuration_confidence ?? 0) || 0)),\n      product_configuration: String(parsed?.product_configuration ?? \"unknown\").trim(),\n      product_configuration_confidence: Math.max(0, Math.min(100, Number(parsed?.product_configuration_confidence ?? 0) || 0)),\n      seo_image_analysis_valid: Boolean(parsed),\n      seo_image_analysis_needs_review: !parsed,\n    },\n  };\n});"
+      }
+    }
+  ],
+  "connections": {
+    "Receive Catalogue Job": {
+      "main": [
+        [
+          {
+            "node": "Normalize Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Request": {
+      "main": [
+        [
+          {
+            "node": "Fetch Catalogue Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Catalogue Job": {
+      "main": [
+        [
+          {
+            "node": "Mark Job Processing",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Load Active Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Job Processing": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge Job",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Download Catalogue ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download Catalogue ZIP": {
+      "main": [
+        [
+          {
+            "node": "Extract Catalogue ZIP",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Catalogue ZIP": {
+      "main": [
+        [
+          {
+            "node": "Detect Product Folders",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Product Folders": {
+      "main": [
+        [
+          {
+            "node": "Select Product Images",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Product Images": {
+      "main": [
+        [
+          {
+            "node": "Prepare Images for AI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Images for AI": {
+      "main": [
+        [
+          {
+            "node": "AI Image Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Image Analysis": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Visual Evidence",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Visual Evidence": {
+      "main": [
+        [
+          {
+            "node": "Classify Product Category",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify Product Category": {
+      "main": [
+        [
+          {
+            "node": "Normalize Category Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Active Templates": {
+      "main": [
+        [
+          {
+            "node": "Wait for Templates",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "Wait for Templates": {
+      "main": [
+        [
+          {
+            "node": "Resolve Category Template",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Category Template": {
+      "main": [
+        [
+          {
+            "node": "Generate Product Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Product Content": {
+      "main": [
+        [
+          {
+            "node": "Build Product Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Product Fields": {
+      "main": [
+        [
+          {
+            "node": "Validate Product Output",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Validate Product Output": {
+      "main": [
+        [
+          {
+            "node": "Prepare Product Rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Product Rows": {
+      "main": [
+        [
+          {
+            "node": "Upsert Catalogue Products",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Catalogue Products": {
+      "main": [
+        [
+          {
+            "node": "Summarize Catalogue Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize Catalogue Job": {
+      "main": [
+        [
+          {
+            "node": "Finalize Catalogue Job",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize Category Result": {
+      "main": [
+        [
+          {
+            "node": "Extract SEO Signals from Image Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract SEO Signals from Image Analysis": {
+      "main": [
+        [
+          {
+            "node": "Normalize SEO Image Signals",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize SEO Image Signals": {
+      "main": [
+        [
+          {
+            "node": "Wait for Templates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "availableInMCP": true
+  },
+  "active": false,
+  "pinData": {},
+  "meta": {
+    "exportedFromWorkflowId": "HsNPj9LlZwTcKoch",
+    "exportedVersionId": "c32adfad-7341-4301-8022-1443c4dcde49",
+    "sourceDescription": "Catalogue Studio job intake and Supabase processing workflow."
+  }
+}
