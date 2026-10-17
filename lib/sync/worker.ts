@@ -596,7 +596,7 @@ export async function runSyncJob(
                 checksum: img.md5Checksum,
                 driveModifiedAt: img.modifiedTime ? new Date(img.modifiedTime) : null,
                 dryRun: false,
-                existingShopifyMediaId,
+                existingShopifyMediaId: existingMediaId,
               },
               { ...deps.shopify, images: deps.images },
             ),

@@ -204,7 +204,11 @@ function setup(
     },
   };
   const searchSpy = vi.fn(searchProducts);
-  const getManualProductMapping = vi.fn(async () => null);
+  const getManualProductMapping = vi.fn(
+    async (
+      _input: Parameters<NonNullable<ScanDeps["getManualProductMapping"]>>[0],
+    ): Promise<Awaited<ReturnType<NonNullable<ScanDeps["getManualProductMapping"]>>>> => null,
+  );
   const deps: ScanDeps = {
     google: {
       config: googleConfig,
