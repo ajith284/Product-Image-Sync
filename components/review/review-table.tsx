@@ -2,16 +2,166 @@
 
 import {
   ArrowDownAZIcon,
+  CheckIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  Loader2Icon,
   SearchIcon,
 } from "lucide-react";
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState, useTransition } from "react";
 
+import { saveProductMapping } from "@/app/(app)/review/actions";
 import type { ReviewListItem } from "@/lib/data/sync";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+
+type ProductRow = {
+  id: string;
+  legacyResourceId: string;
+  title: string;
+  handle: string;
+  status: string;
+};
+
+type ProductSearchResponse = {
+  products: ProductRow[];
+  error?: string;
+};
+
+function MapProductSheet({
+  item,
+  onClose,
+}: {
+  item: ReviewListItem | null;
+  onClose: () => void;
+}) {
+  const [term, setTerm] = useState("");
+  const [products, setProducts] = useState<ProductRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [saving, startSaving] = useTransition();
+
+  const search = async () => {
+    if (!item || !term.trim()) return;
+    setSearching(true);
+    setError(null);
+    try {
+      const response = await fetch("/api/shopify/products/search", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ storeId: item.store_id, searchTerm: term }),
+      });
+      const body = (await response.json().catch(() => null)) as ProductSearchResponse | null;
+      if (!response.ok || !body) {
+        setProducts([]);
+        setError(body?.error ?? "Product search failed.");
+        return;
+      }
+      setProducts(body.products ?? []);
+      if ((body.products ?? []).length === 0) setError("No Shopify products found for this search.");
+    } catch {
+      setProducts([]);
+      setError("We couldn't reach Shopify product search.");
+    } finally {
+      setSearching(false);
+    }
+  };
+
+  const choose = (product: ProductRow) => {
+    if (!item) return;
+    setError(null);
+    startSaving(async () => {
+      const result = await saveProductMapping({
+        storeId: item.store_id,
+        driveFolderId: item.drive_folder_id,
+        driveFolderName: item.drive_folder_name,
+        shopifyProductId: product.id,
+        shopifyProductTitle: product.title,
+      });
+      if (!result.ok) {
+        setError(result.error);
+        return;
+      }
+      onClose();
+      window.location.reload();
+    });
+  };
+
+  return (
+    <Sheet open={Boolean(item)} onOpenChange={(open) => !open && onClose()}>
+      <SheetContent className="w-full sm:max-w-lg">
+        <SheetHeader>
+          <SheetTitle>Map Drive product to Shopify</SheetTitle>
+          <SheetDescription>
+            This mapping is saved only for this store and this Drive product folder. Future syncs use it before title matching.
+          </SheetDescription>
+        </SheetHeader>
+
+        {item ? (
+          <div className="grid gap-4 overflow-y-auto px-4 pb-6">
+            <div className="rounded-lg border bg-muted/20 p-3 text-sm">
+              <div className="font-medium">{item.drive_folder_name || "Unnamed Drive folder"}</div>
+              <div className="mt-1 text-muted-foreground">{item.store_name}</div>
+            </div>
+
+            <div className="grid gap-2">
+              <Label htmlFor="map-product-search">Search this Shopify store</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="map-product-search"
+                  value={term}
+                  onChange={(event) => setTerm(event.target.value)}
+                  placeholder="Enter Shopify product title..."
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter") {
+                      event.preventDefault();
+                      void search();
+                    }
+                  }}
+                />
+                <Button type="button" onClick={() => void search()} disabled={searching || !term.trim()}>
+                  {searching ? <Loader2Icon className="animate-spin" /> : <SearchIcon />}
+                  Search
+                </Button>
+              </div>
+            </div>
+
+            {error ? <p className="text-sm text-destructive">{error}</p> : null}
+
+            <div className="grid gap-2">
+              {products.map((product) => (
+                <button
+                  key={product.id}
+                  type="button"
+                  disabled={saving}
+                  onClick={() => choose(product)}
+                  className="flex w-full items-center justify-between gap-3 rounded-lg border p-3 text-left transition-colors hover:bg-muted/50 disabled:opacity-60"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate font-medium">{product.title}</div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {product.status} · Product ID {product.legacyResourceId}
+                    </div>
+                  </div>
+                  {saving ? <Loader2Icon className="size-4 animate-spin" /> : <CheckIcon className="size-4" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : null}
+      </SheetContent>
+    </Sheet>
+  );
+}
 
 type StatusFilter =
   | "all"
@@ -107,6 +257,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
   const [sort, setSort] = useState<SortMode>("name_asc");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE);
+  const [mappingItem, setMappingItem] = useState<ReviewListItem | null>(null);
   const tableTopRef = useRef<HTMLDivElement | null>(null);
 
   const stores = useMemo(
@@ -351,12 +502,25 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
                         <NumberCell value={item.images_uploaded} />
                         <NumberCell value={item.images_skipped} />
                         <NumberCell value={item.images_failed} />
-                        <div>
+                        <div className="flex flex-wrap items-center gap-2">
                           <span
                             className={`inline-flex whitespace-nowrap rounded-full px-3 py-1 text-xs font-medium ${meta.className}`}
                           >
                             {meta.label}
                           </span>
+                          {item.status === "no_product_found" || item.status === "multiple_matches" ? (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              className="h-7 px-2 text-xs"
+                              onClick={() => {
+                                setMappingItem(item);
+                              }}
+                            >
+                              Map product
+                            </Button>
+                          ) : null}
                         </div>
                       </div>
                     );
@@ -441,6 +605,7 @@ export function ReviewTable({ items }: { items: ReviewListItem[] }) {
           </div>
         </>
       )}
+      <MapProductSheet item={mappingItem} onClose={() => setMappingItem(null)} />
     </div>
   );
 }
