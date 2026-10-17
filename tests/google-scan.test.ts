@@ -204,6 +204,7 @@ function setup(
     },
   };
   const searchSpy = vi.fn(searchProducts);
+  const getManualProductMapping = vi.fn(async () => null);
   const deps: ScanDeps = {
     google: {
       config: googleConfig,
@@ -215,8 +216,9 @@ function setup(
     shopify: { config: shopifyConfig, repo: s.repo, fetch: shop.fetch, now: () => G_NOW },
     limits: over.limits,
     searchProducts: searchSpy,
+    getManualProductMapping,
   };
-  return { deps, drive, shop, searchSpy };
+  return { deps, drive, shop, searchSpy, getManualProductMapping };
 }
 
 const both = { categoryRoots: [{ id: SOFA, name: "Sofa image" }, { id: SOFA_BED, name: "Sofa bed image" }] };
@@ -278,6 +280,36 @@ describe("scanCategoryRoots — matching", () => {
       expect(searched).not.toContain(forbidden);
     }
     expect(shop.terms.join(" | ")).not.toMatch(/sof-?001|image|jpg/i);
+  });
+
+  it("manual mapping is store + Drive-folder scoped and wins over title matching", async () => {
+    const { deps, searchSpy, getManualProductMapping } = setup();
+    getManualProductMapping.mockImplementation(async (input) =>
+      input.storeId === G_STORE_ID && input.driveFolderId === "prodMinorxxxxxx"
+        ? {
+            storeId: G_STORE_ID,
+            driveFolderId: "prodMinorxxxxxx",
+            driveFolderName: "Minor",
+            shopifyProductId: "gid://shopify/Product/999",
+            shopifyProductTitle: "Completely Different Shopify Title",
+          }
+        : null,
+    );
+
+    const r = await scan(deps);
+    expect(byProduct(r, "Minor").match).toMatchObject({
+      outcome: "single_match",
+      products: [
+        {
+          id: "gid://shopify/Product/999",
+          title: "Completely Different Shopify Title",
+          status: "MAPPED",
+        },
+      ],
+    });
+    expect(
+      searchSpy.mock.calls.some((call) => call[0].searchTerm === "Minor"),
+    ).toBe(false);
   });
 
   it("12. zero matches → no_product_found", async () => {
