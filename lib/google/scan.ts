@@ -10,6 +10,7 @@ import {
   type DriveDownloadDeps,
 } from "@/lib/google/download";
 import { escapeDriveQuery, FOLDER_MIME, isIgnoredFolder } from "@/lib/google/folders";
+import { getManualProductMapping as defaultGetManualProductMapping } from "@/lib/matching/product-mappings";
 import { classifyMatches, type MatchStatus } from "@/lib/matching/product-match";
 import { ShopifyApiError } from "@/lib/shopify/client";
 import type { ConnectionDeps } from "@/lib/shopify/connection";
@@ -115,6 +116,8 @@ export type ScanDeps = {
   limits?: Partial<ScanLimits>;
   /** Injectable for tests; defaults to the Prompt 5 service. */
   searchProducts?: (input: { storeId: string; searchTerm: string }, deps: ConnectionDeps) => Promise<ProductSearchResult>;
+  /** Store-scoped manual mapping lookup. Manual mapping always wins over title matching. */
+  getManualProductMapping?: typeof defaultGetManualProductMapping;
 };
 
 const LIST_COMMON = { supportsAllDrives: "true", includeItemsFromAllDrives: "true", corpora: "allDrives" } as const;
@@ -176,6 +179,8 @@ export async function scanCategoryRoots(
 ): Promise<ScanResult> {
   const limits: ScanLimits = { ...DEFAULT_SCAN_LIMITS, ...deps.limits };
   const search = deps.searchProducts ?? defaultSearchProducts;
+  const getManualProductMapping =
+    deps.getManualProductMapping ?? defaultGetManualProductMapping;
   try {
     // workspace → store → Google connected → category roots (of the current account)
     const store = await loadStoreDriveContext(input, deps.google);
@@ -335,12 +340,35 @@ export async function scanCategoryRoots(
             });
           }
 
-          // Matching key = the PRODUCT folder name only (never the code folder, root or filenames).
+          // Manual mapping is store + Drive-folder scoped, so the same Drive folder name
+          // can map to different Shopify products in different stores. It always wins.
+          const manual = await getManualProductMapping({
+            workspaceId: input.workspaceId,
+            storeId: input.storeId,
+            driveFolderId: product.id,
+          });
+          const productMatch: ScanMatch = manual
+            ? {
+                outcome: "single_match",
+                products: [
+                  {
+                    id: manual.shopifyProductId,
+                    title: manual.shopifyProductTitle ?? product.name,
+                    handle: "",
+                    status: "MAPPED",
+                  },
+                ],
+                truncated: false,
+              }
+            : await match(product.name);
+
+          // Automatic fallback still uses the PRODUCT folder name only (never the
+          // code folder, root or image filenames).
           result.items.push({
             category_root: { id: root.id, name: summary.name },
             code_folder: { id: code.id, name: code.name },
             product_folder: { id: product.id, name: product.name },
-            match: await match(product.name),
+            match: productMatch,
             images,
             images_truncated: files.truncated,
             nested_folders: nestedFolders,
