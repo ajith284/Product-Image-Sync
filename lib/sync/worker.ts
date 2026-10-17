@@ -16,7 +16,7 @@ import {
 } from "@/lib/google/scan";
 import type { ConnectionDeps } from "@/lib/shopify/connection";
 import {
-  getAttachedProductMediaIds as defaultGetAttachedProductMediaIds,
+  createProductMediaContentMatcher as defaultCreateProductMediaContentMatcher,
   ShopifyUploadError,
   uploadProductImage as defaultUpload,
   type UploadProductImageResult,
@@ -55,7 +55,7 @@ export type WorkerDeps = {
   scan?: typeof defaultScan;
   download?: typeof defaultDownload;
   upload?: typeof defaultUpload;
-  getAttachedProductMediaIds?: typeof defaultGetAttachedProductMediaIds;
+  createProductMediaContentMatcher?: typeof defaultCreateProductMediaContentMatcher;
   sleep?: (ms: number) => Promise<void>;
   now?: () => number;
   newWorkerId?: () => string;
@@ -189,8 +189,8 @@ export async function runSyncJob(
   const scan = deps.scan ?? defaultScan;
   const download = deps.download ?? defaultDownload;
   const upload = deps.upload ?? defaultUpload;
-  const getAttachedProductMediaIds =
-    deps.getAttachedProductMediaIds ?? defaultGetAttachedProductMediaIds;
+  const createProductMediaContentMatcher =
+    deps.createProductMediaContentMatcher ?? defaultCreateProductMediaContentMatcher;
   const sleep =
     deps.sleep ?? ((ms: number) => new Promise<void>((r) => setTimeout(r, ms)));
   const now = deps.now ?? Date.now;
@@ -502,23 +502,76 @@ export async function runSyncJob(
     );
     const byFile = new Map(states.map((s) => [s.driveFileId, s]));
 
-    // Reconcile the ledger with Shopify's live product media before skipping
-    // unchanged images. One Shopify media-list query per matched product, not
-    // one query per image. If an image was manually removed from the product,
-    // reset only that Drive file so it is uploaded again on this run.
+    // One Shopify media query per matched product. Besides reconciling our
+    // upload ledger, this matcher can compare Drive bytes with Shopify's
+    // ORIGINAL source bytes, so a renamed file is still recognized as the same image.
+    let mediaMatcher: Awaited<ReturnType<typeof createProductMediaContentMatcher>> | null = null;
     if (!dryRun) {
+      try {
+        mediaMatcher = await createProductMediaContentMatcher(
+          { workspaceId, storeId, productId },
+          deps.shopify,
+        );
+      } catch (error) {
+        const e = error instanceof ShopifyUploadError ? error : null;
+        throw new StopJob(
+          e?.code ?? "INTERNAL_ERROR",
+          e?.publicMessage ?? "Shopify product images could not be checked.",
+        );
+      }
+
       const unchangedUploaded = item.images.filter((img) => {
         const state = byFile.get(img.fileId);
         return state?.uploadStatus === "uploaded" &&
           predictImageAction(state, img, now(), lease) === "skip";
       });
-      if (unchangedUploaded.length) {
-        let attached: Set<string>;
+
+      for (const img of unchangedUploaded) {
+        const state = byFile.get(img.fileId);
+        if (state?.shopifyMediaId && mediaMatcher.attachedIds.has(state.shopifyMediaId)) continue;
+        await deps.images.resetMissing({
+          workspaceId,
+          storeId,
+          shopifyProductId: productId,
+          driveFileId: img.fileId,
+        });
+        byFile.delete(img.fileId);
+      }
+    }
+
+    const before = { ...progress };
+    let itemFailed = 0;
+    for (const img of item.images) {
+      const state = byFile.get(img.fileId);
+      const action = predictImageAction(state, img, now(), lease);
+
+      // Only new/changed files need content comparison. Existing unchanged ledger
+      // rows can skip without downloading. For upload candidates, download once,
+      // compare exact bytes to Shopify, then pass those same bytes to the uploader.
+      if (!dryRun && mediaMatcher && action === "upload") {
+        await checkpoint();
+        let file;
         try {
-          attached = await getAttachedProductMediaIds(
-            { workspaceId, storeId, productId },
-            deps.shopify,
+          file = await withRetry(
+            () => download({ workspaceId, storeId, fileId: img.fileId }, deps.google),
+            driveRetry,
           );
+        } catch (error) {
+          const e = error instanceof DriveDownloadError ? error : null;
+          if (!e || STOP_CODES.has(e.code)) {
+            throw new StopJob(
+              e?.code ?? "INTERNAL_ERROR",
+              e?.publicMessage ?? "The Google Drive download failed.",
+            );
+          }
+          const result = await processImage(item, itemId, productId, img, state);
+          if (result === "failed") itemFailed += 1;
+          continue;
+        }
+
+        let existingMediaId: string | null = null;
+        try {
+          existingMediaId = await mediaMatcher.findExactMatch(file.buffer);
         } catch (error) {
           const e = error instanceof ShopifyUploadError ? error : null;
           throw new StopJob(
@@ -526,32 +579,57 @@ export async function runSyncJob(
             e?.publicMessage ?? "Shopify product images could not be checked.",
           );
         }
-        for (const img of unchangedUploaded) {
-          const state = byFile.get(img.fileId);
-          if (state?.shopifyMediaId && attached.has(state.shopifyMediaId)) continue;
-          await deps.images.resetMissing({
-            workspaceId,
-            storeId,
-            shopifyProductId: productId,
-            driveFileId: img.fileId,
-          });
-          byFile.delete(img.fileId);
-        }
-      }
-    }
 
-    const before = { ...progress };
-    let itemFailed = 0;
-    for (const img of item.images) {
-      if (
-        (await processImage(
-          item,
-          itemId,
-          productId,
-          img,
-          byFile.get(img.fileId),
-        )) === "failed"
-      )
+        const result = await withRetry<UploadProductImageResult>(
+          () =>
+            upload(
+              {
+                workspaceId,
+                storeId,
+                syncItemId: itemId,
+                shopifyProductId: productId,
+                driveFileId: img.fileId,
+                driveFolderId: img.folderId,
+                filename: img.filename,
+                mimeType: file.mimeType,
+                bytes: file.buffer,
+                checksum: img.md5Checksum,
+                driveModifiedAt: img.modifiedTime ? new Date(img.modifiedTime) : null,
+                dryRun: false,
+                existingShopifyMediaId,
+              },
+              { ...deps.shopify, images: deps.images },
+            ),
+          (r) => {
+            const res = r as UploadProductImageResult;
+            return res && res.status === "failed" && res.error.retryable
+              ? { retry: true, afterS: res.error.retryAfterSeconds }
+              : { retry: false };
+          },
+        );
+
+        if (result.status === "uploaded") {
+          progress.uploaded += 1;
+          mediaMatcher.remember(result.mediaId, file.buffer);
+        } else if (result.status === "skipped") {
+          progress.skipped += 1;
+          if (result.reason === "permanent_failure") blocked += 1;
+          if (result.mediaId) mediaMatcher.remember(result.mediaId, file.buffer);
+        } else if (result.status === "failed") {
+          if (STOP_CODES.has(result.error.code))
+            throw new StopJob(result.error.code, result.error.message);
+          progress.failed += 1;
+          pushLimited(failedItems, {
+            product_folder: item.product_folder.name,
+            filename: img.filename,
+            code: result.error.code,
+          });
+          itemFailed += 1;
+        }
+        continue;
+      }
+
+      if ((await processImage(item, itemId, productId, img, state)) === "failed")
         itemFailed += 1;
     }
     progress.processed += 1;
