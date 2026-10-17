@@ -171,16 +171,19 @@ describe("searchProducts", () => {
     expect(unlisted.products).toMatchObject([{ status: "UNLISTED" }]);
   });
 
-  it("applies the exact contains rule after Shopify's broader word search", async () => {
+  it("applies the exact contains rule and falls back when Shopify word-prefix search misses a valid title", async () => {
     const calls: { query: string; after: string | null; token: string | null }[] = [];
     const { deps: d } = deps(fakeShopify(CATALOG, { calls }));
-    // Shopify's word search finds "Milano 3 Seater Sofa" and "Milano Corner Sofa"
-    // for sofa* AND milano*, but no title CONTAINS "sofa milano".
+    // Shopify's word search may return candidates whose word order differs, but
+    // our authoritative local contains rule still rejects them.
     const r = await searchProducts({ storeId: STORE_ID, searchTerm: "Sofa Milano" }, d);
     expect(r.products).toEqual([]);
-    // "SuperMilano Stool" is not a word-start match in Shopify search (documented limitation).
-    const m = await searchProducts({ storeId: STORE_ID, searchTerm: "Milano" }, d);
-    expect(titles(m)).not.toContain("SuperMilano Stool");
+
+    // "SuperMilano Stool" does not match Shopify's title:milano* word-prefix
+    // search, so the bounded all-status fallback finds it and local contains wins.
+    const m = await searchProducts({ storeId: STORE_ID, searchTerm: "SuperMilano" }, d);
+    expect(titles(m)).toContain("SuperMilano Stool");
+    expect(calls.some((c) => c.query === "status:active,archived,draft,unlisted")).toBe(true);
   });
 
   it("sends the access token only to the store's Shopify endpoint, never returns it", async () => {
