@@ -2,6 +2,8 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import sharp from "sharp";
+
 import { createShopifyClient, ShopifyApiError, type ShopifyAdminClient } from "@/lib/shopify/client";
 import { refreshTokenIfNeeded, type ConnectionDeps } from "@/lib/shopify/connection";
 import { ShopifyFlowError } from "@/lib/shopify/errors";
@@ -307,8 +309,9 @@ export type ProductMediaContentMatcher = {
   /** MediaImage IDs currently attached to this exact product. */
   attachedIds: ReadonlySet<string>;
   /**
-   * Exact-content duplicate check against Shopify's original source files.
-   * Filenames are deliberately ignored.
+   * Duplicate check against Shopify's original source files.
+   * It checks exact bytes first, then a conservative visual fingerprint so
+   * renamed, resized or recompressed copies are still recognized.
    */
   findExactMatch(bytes: Uint8Array): Promise<string | null>;
   /** Adds an image uploaded during this job so a later Drive file with the same bytes is skipped too. */
@@ -317,6 +320,93 @@ export type ProductMediaContentMatcher = {
 
 function sha256(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
+}
+
+
+const VISUAL_FINGERPRINT_SIZE = 32;
+const VISUAL_MAX_MEAN_ABS_ERROR = 8;
+const VISUAL_MAX_EDGE_HASH_DISTANCE = 96;
+
+type VisualFingerprint = {
+  pixels: Uint8Array;
+  edgeHash: Uint8Array;
+};
+
+async function buildVisualFingerprint(bytes: Uint8Array): Promise<VisualFingerprint | null> {
+  try {
+    const { data, info } = await sharp(Buffer.from(bytes), { failOn: "none" })
+      .rotate()
+      .flatten({ background: "#ffffff" })
+      .resize(VISUAL_FINGERPRINT_SIZE, VISUAL_FINGERPRINT_SIZE, {
+        fit: "fill",
+        kernel: "lanczos3",
+      })
+      .toColourspace("srgb")
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const channels = info.channels;
+    if (channels < 1 || data.length !== VISUAL_FINGERPRINT_SIZE * VISUAL_FINGERPRINT_SIZE * channels) {
+      return null;
+    }
+
+    const pixels = Uint8Array.from(data);
+    const grey = new Uint8Array(VISUAL_FINGERPRINT_SIZE * VISUAL_FINGERPRINT_SIZE);
+    for (let i = 0; i < grey.length; i++) {
+      const offset = i * channels;
+      const r = pixels[offset] ?? 0;
+      const g = pixels[offset + 1] ?? r;
+      const b = pixels[offset + 2] ?? r;
+      grey[i] = (77 * r + 150 * g + 29 * b) >> 8;
+    }
+
+    const comparisons = VISUAL_FINGERPRINT_SIZE * (VISUAL_FINGERPRINT_SIZE - 1);
+    const edgeHash = new Uint8Array(Math.ceil(comparisons / 8));
+    let bit = 0;
+    for (let y = 0; y < VISUAL_FINGERPRINT_SIZE; y++) {
+      for (let x = 0; x < VISUAL_FINGERPRINT_SIZE - 1; x++, bit++) {
+        const left = grey[y * VISUAL_FINGERPRINT_SIZE + x]!;
+        const right = grey[y * VISUAL_FINGERPRINT_SIZE + x + 1]!;
+        if (left > right) edgeHash[bit >> 3] |= 1 << (bit & 7);
+      }
+    }
+
+    return { pixels, edgeHash };
+  } catch {
+    return null;
+  }
+}
+
+function popcount8(value: number): number {
+  let v = value & 0xff;
+  v -= (v >> 1) & 0x55;
+  v = (v & 0x33) + ((v >> 2) & 0x33);
+  return (v + (v >> 4)) & 0x0f;
+}
+
+function visualFingerprintsMatch(a: VisualFingerprint, b: VisualFingerprint): boolean {
+  if (a.pixels.length !== b.pixels.length || a.edgeHash.length !== b.edgeHash.length) return false;
+
+  let totalDifference = 0;
+  for (let i = 0; i < a.pixels.length; i++) {
+    totalDifference += Math.abs(a.pixels[i]! - b.pixels[i]!);
+  }
+  const meanAbsError = totalDifference / a.pixels.length;
+  if (meanAbsError > VISUAL_MAX_MEAN_ABS_ERROR) return false;
+
+  let edgeDistance = 0;
+  for (let i = 0; i < a.edgeHash.length; i++) {
+    edgeDistance += popcount8(a.edgeHash[i]! ^ b.edgeHash[i]!);
+    if (edgeDistance > VISUAL_MAX_EDGE_HASH_DISTANCE) return false;
+  }
+  return true;
+}
+
+export async function imagesAreVisuallyEquivalent(a: Uint8Array, b: Uint8Array): Promise<boolean> {
+  if (a.byteLength === b.byteLength && sha256(a) === sha256(b)) return true;
+  const [left, right] = await Promise.all([buildVisualFingerprint(a), buildVisualFingerprint(b)]);
+  return Boolean(left && right && visualFingerprintsMatch(left, right));
 }
 
 async function listAttachedMediaSources(
@@ -380,9 +470,11 @@ async function listAttachedMediaSources(
 /**
  * Builds one read-only matcher for a Shopify product.
  *
- * Shopify's MediaImage.originalSource is the original uploaded file, so an exact
- * byte hash catches the same image even when Shopify and Drive use different filenames.
- * Signed original-source URLs stay inside this closure and are never logged, stored or returned.
+ * Shopify's MediaImage.originalSource is the original uploaded file. We check
+ * exact bytes first and then a conservative normalized visual fingerprint, so
+ * Shopify re-encoding, resizing, metadata changes or filename changes don't create
+ * another copy of the same visible image. Signed source URLs stay inside this
+ * closure and are never logged, stored or returned.
  */
 export async function createProductMediaContentMatcher(
   input: { workspaceId: string; storeId: string; productId: string },
@@ -404,6 +496,7 @@ export async function createProductMediaContentMatcher(
   const attachedIds = new Set(sources.map((m) => m.id));
   const knownHashToMedia = new Map<string, string>();
   const sourceHashByMedia = new Map<string, string>();
+  const sourceVisualByMedia = new Map<string, VisualFingerprint | null>();
   const fetchImpl = deps.fetch ?? fetch;
 
   const findExactMatch = async (bytes: Uint8Array): Promise<string | null> => {
@@ -411,12 +504,14 @@ export async function createProductMediaContentMatcher(
     const remembered = knownHashToMedia.get(wantedHash);
     if (remembered) return remembered;
 
+    const wantedVisual = await buildVisualFingerprint(bytes);
+
     for (const media of sources) {
       const source = media.originalSource;
       if (!source) continue;
-      if (source.fileSize !== null && source.fileSize !== bytes.byteLength) continue;
 
       let hash = sourceHashByMedia.get(media.id);
+      let visual = sourceVisualByMedia.get(media.id);
       if (!hash) {
         let response: Response;
         try {
@@ -451,13 +546,15 @@ export async function createProductMediaContentMatcher(
         }
 
         const original = new Uint8Array(await response.arrayBuffer());
-        if (source.fileSize !== null && original.byteLength !== source.fileSize) continue;
         hash = sha256(original);
+        visual = await buildVisualFingerprint(original);
         sourceHashByMedia.set(media.id, hash);
+        sourceVisualByMedia.set(media.id, visual);
         knownHashToMedia.set(hash, media.id);
       }
 
       if (hash === wantedHash) return media.id;
+      if (wantedVisual && visual && visualFingerprintsMatch(wantedVisual, visual)) return media.id;
     }
     return null;
   };

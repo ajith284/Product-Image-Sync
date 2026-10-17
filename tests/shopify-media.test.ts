@@ -1,3 +1,4 @@
+import sharp from "sharp";
 import { describe, expect, it } from "vitest";
 
 import { createShopifyClient, ShopifyApiError } from "@/lib/shopify/client";
@@ -9,6 +10,7 @@ import {
   createStagedUpload,
   getAttachedProductMediaIds,
   getProductForUpload,
+  imagesAreVisuallyEquivalent,
   postToStagedTarget,
   ShopifyUploadError,
   uploadProductImage,
@@ -109,6 +111,39 @@ describe("getAttachedProductMediaIds", () => {
     );
     expect([...ids]).toEqual([mediaA, mediaB]);
     expect(shop.ops()).toContain("ProductMediaIds");
+  });
+});
+
+describe("visual duplicate detection", () => {
+  async function encodedPair() {
+    const width = 160;
+    const height = 120;
+    const raw = Buffer.alloc(width * height * 3);
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const i = (y * width + x) * 3;
+        raw[i] = (x * 3 + y) % 256;
+        raw[i + 1] = (y * 5 + Math.floor(x / 2)) % 256;
+        raw[i + 2] = ((x ^ y) * 7) % 256;
+      }
+    }
+    const pngBytes = await sharp(raw, { raw: { width, height, channels: 3 } }).png().toBuffer();
+    const jpegBytes = await sharp(raw, { raw: { width, height, channels: 3 } }).jpeg({ quality: 55 }).toBuffer();
+    return { raw, width, height, pngBytes, jpegBytes };
+  }
+
+  it("matches the same visible image after recompression", async () => {
+    const { pngBytes, jpegBytes } = await encodedPair();
+    expect(pngBytes.byteLength).not.toBe(jpegBytes.byteLength);
+    expect(await imagesAreVisuallyEquivalent(pngBytes, jpegBytes)).toBe(true);
+  });
+
+  it("keeps genuinely different product images separate", async () => {
+    const { raw, width, height, pngBytes } = await encodedPair();
+    const different = Buffer.from(raw);
+    for (let i = 0; i < different.length; i += 3) different[i] = 255 - different[i]!;
+    const other = await sharp(different, { raw: { width, height, channels: 3 } }).jpeg({ quality: 70 }).toBuffer();
+    expect(await imagesAreVisuallyEquivalent(pngBytes, other)).toBe(false);
   });
 });
 
