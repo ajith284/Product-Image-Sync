@@ -556,9 +556,31 @@ export function workerEnv(
     }
     return set;
   };
-  const getAttachedProductMediaIds = vi.fn(
-    async ({ productId }: { workspaceId: string; storeId: string; productId: string }) =>
-      new Set(attachedFor(productId)),
+  const mediaBytesById = new Map<string, Uint8Array>();
+  const createProductMediaContentMatcher = vi.fn(
+    async ({ productId }: { workspaceId: string; storeId: string; productId: string }) => {
+      const attachedIds = attachedFor(productId);
+      return {
+        attachedIds,
+        findExactMatch: async (bytes: Uint8Array) => {
+          for (const mediaId of attachedIds) {
+            const existing = mediaBytesById.get(mediaId);
+            if (
+              existing &&
+              existing.length === bytes.length &&
+              existing.every((value, index) => value === bytes[index])
+            ) {
+              return mediaId;
+            }
+          }
+          return null;
+        },
+        remember: (mediaId: string, bytes: Uint8Array) => {
+          attachedIds.add(mediaId);
+          mediaBytesById.set(mediaId, new Uint8Array(bytes));
+        },
+      };
+    },
   );
 
   /** Mimics uploadProductImage: sync_image_claim → (Shopify) → mark uploaded. */
@@ -611,6 +633,7 @@ export function workerEnv(
         claim.image.shopifyMediaId ?? `gid://shopify/MediaImage/${++media}`;
       await deps.images.markUploaded(scope, mediaId);
       attachedFor(input.shopifyProductId).add(mediaId);
+      mediaBytesById.set(mediaId, new Uint8Array(input.bytes));
       return { status: "uploaded", productId: input.shopifyProductId, mediaId };
     },
   );
@@ -631,8 +654,8 @@ export function workerEnv(
     scan: scan as unknown as WorkerDeps["scan"],
     download: download as unknown as WorkerDeps["download"],
     upload: upload as unknown as WorkerDeps["upload"],
-    getAttachedProductMediaIds:
-      getAttachedProductMediaIds as unknown as WorkerDeps["getAttachedProductMediaIds"],
+    createProductMediaContentMatcher:
+      createProductMediaContentMatcher as unknown as WorkerDeps["createProductMediaContentMatcher"],
     sleep: vi.fn(async () => undefined),
     now: () => clock.now,
     newWorkerId: () => `worker-test-${Math.random().toString(36).slice(2, 10)}`,
@@ -644,8 +667,9 @@ export function workerEnv(
     scan,
     download,
     upload,
-    getAttachedProductMediaIds,
+    createProductMediaContentMatcher,
     attachedMediaByProduct,
+    mediaBytesById,
     bytesByFile,
     tree,
   };
