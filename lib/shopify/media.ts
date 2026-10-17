@@ -1,5 +1,7 @@
 import "server-only";
 
+import { createHash } from "node:crypto";
+
 import { createShopifyClient, ShopifyApiError, type ShopifyAdminClient } from "@/lib/shopify/client";
 import { refreshTokenIfNeeded, type ConnectionDeps } from "@/lib/shopify/connection";
 import { ShopifyFlowError } from "@/lib/shopify/errors";
@@ -186,6 +188,12 @@ export const PRODUCT_MEDIA_IDS_QUERY = /* GraphQL */ `
       media(first: 250, after: $after, query: "media_type:IMAGE", sortKey: POSITION) {
         nodes {
           id
+          ... on MediaImage {
+            originalSource {
+              url
+              fileSize
+            }
+          }
         }
         pageInfo {
           hasNextPage
@@ -290,15 +298,96 @@ export async function getProductForUpload(client: ShopifyAdminClient, productId:
 }
 
 
+type AttachedMediaSource = {
+  id: string;
+  originalSource: { url: string; fileSize: number | null } | null;
+};
+
+export type ProductMediaContentMatcher = {
+  /** MediaImage IDs currently attached to this exact product. */
+  attachedIds: ReadonlySet<string>;
+  /**
+   * Exact-content duplicate check against Shopify's original source files.
+   * Filenames are deliberately ignored.
+   */
+  findExactMatch(bytes: Uint8Array): Promise<string | null>;
+  /** Adds an image uploaded during this job so a later Drive file with the same bytes is skipped too. */
+  remember(mediaId: string, bytes: Uint8Array): void;
+};
+
+function sha256(bytes: Uint8Array): string {
+  return createHash("sha256").update(bytes).digest("hex");
+}
+
+async function listAttachedMediaSources(
+  client: ShopifyAdminClient,
+  productId: string,
+): Promise<AttachedMediaSource[]> {
+  type ProductMediaIdsData = {
+    product: {
+      id: string;
+      media: {
+        nodes: {
+          id: string;
+          originalSource?: { url?: string | null; fileSize?: number | null } | null;
+        }[];
+        pageInfo: { hasNextPage: boolean; endCursor: string | null };
+      };
+    } | null;
+  };
+  type ProductMediaIdsVariables = { id: string; after: string | null };
+
+  const media: AttachedMediaSource[] = [];
+  let after: string | null = null;
+  for (;;) {
+    const response: { data: ProductMediaIdsData } = await client.graphql<
+      ProductMediaIdsData,
+      ProductMediaIdsVariables
+    >(PRODUCT_MEDIA_IDS_QUERY, { id: productId, after });
+
+    const product: NonNullable<ProductMediaIdsData["product"]> | null = response.data.product;
+    if (!product || product.id !== productId) throw new ShopifyUploadError("PRODUCT_NOT_FOUND");
+
+    for (const node of product.media.nodes ?? []) {
+      if (!MEDIA_IMAGE_GID_RE.test(node.id)) continue;
+      const rawUrl = node.originalSource?.url;
+      let originalSource: AttachedMediaSource["originalSource"] = null;
+      if (rawUrl) {
+        try {
+          const u = new URL(rawUrl);
+          if (u.protocol === "https:") {
+            originalSource = {
+              url: u.toString(),
+              fileSize:
+                typeof node.originalSource?.fileSize === "number" && node.originalSource.fileSize >= 0
+                  ? node.originalSource.fileSize
+                  : null,
+            };
+          }
+        } catch {
+          // Ignore an unusable source URL. The media ID still participates in reconciliation.
+        }
+      }
+      media.push({ id: node.id, originalSource });
+    }
+
+    if (!product.media.pageInfo.hasNextPage) return media;
+    after = product.media.pageInfo.endCursor;
+    if (!after) throw new ShopifyUploadError("INVALID_REQUEST");
+  }
+}
+
 /**
- * Returns the MediaImage IDs currently attached to a Shopify product.
- * This is intentionally read-only and paginated. The sync worker uses it once
- * per matched product to reconcile its upload ledger with Shopify's live state.
+ * Builds one read-only matcher for a Shopify product.
+ *
+ * Shopify's MediaImage.originalSource is the original uploaded file, so an exact
+ * byte hash catches the same image even when Shopify and Drive use different filenames.
+ * Signed original-source URLs stay inside this closure and are never logged, stored or returned.
  */
-export async function getAttachedProductMediaIds(
+export async function createProductMediaContentMatcher(
   input: { workspaceId: string; storeId: string; productId: string },
   deps: ConnectionDeps,
-): Promise<Set<string>> {
+): Promise<ProductMediaContentMatcher> {
   if (!PRODUCT_GID_RE.test(input.productId)) throw new ShopifyUploadError("PRODUCT_NOT_FOUND");
 
   const access = await refreshTokenIfNeeded(input.storeId, deps);
@@ -311,36 +400,89 @@ export async function getAttachedProductMediaIds(
     apiVersion: deps.config.apiVersion,
     fetch: deps.fetch,
   });
+  const sources = await listAttachedMediaSources(client, input.productId);
+  const attachedIds = new Set(sources.map((m) => m.id));
+  const knownHashToMedia = new Map<string, string>();
+  const sourceHashByMedia = new Map<string, string>();
+  const fetchImpl = deps.fetch ?? fetch;
 
-  type ProductMediaIdsData = {
-    product: {
-      id: string;
-      media: {
-        nodes: { id: string }[];
-        pageInfo: { hasNextPage: boolean; endCursor: string | null };
-      };
-    } | null;
-  };
-  type ProductMediaIdsVariables = { id: string; after: string | null };
+  const findExactMatch = async (bytes: Uint8Array): Promise<string | null> => {
+    const wantedHash = sha256(bytes);
+    const remembered = knownHashToMedia.get(wantedHash);
+    if (remembered) return remembered;
 
-  const ids = new Set<string>();
-  let after: string | null = null;
-  for (;;) {
-    const response: { data: ProductMediaIdsData } = await client.graphql<
-      ProductMediaIdsData,
-      ProductMediaIdsVariables
-    >(PRODUCT_MEDIA_IDS_QUERY, { id: input.productId, after });
+    for (const media of sources) {
+      const source = media.originalSource;
+      if (!source) continue;
+      if (source.fileSize !== null && source.fileSize !== bytes.byteLength) continue;
 
-    const product: NonNullable<ProductMediaIdsData["product"]> | null =
-      response.data.product;
-    if (!product || product.id !== input.productId) throw new ShopifyUploadError("PRODUCT_NOT_FOUND");
-    for (const media of product.media.nodes ?? []) {
-      if (MEDIA_IMAGE_GID_RE.test(media.id)) ids.add(media.id);
+      let hash = sourceHashByMedia.get(media.id);
+      if (!hash) {
+        let response: Response;
+        try {
+          response = await fetchImpl(source.url, {
+            method: "GET",
+            cache: "no-store",
+            redirect: "follow",
+            signal: AbortSignal.timeout(20_000),
+          });
+        } catch {
+          throw new ShopifyUploadError("NETWORK_ERROR", {
+            message: "We couldn't verify the existing Shopify product images.",
+          });
+        }
+        if (!response.ok) {
+          const retryAfter = Number(response.headers.get("Retry-After"));
+          if (response.status === 401 || response.status === 403) {
+            throw new ShopifyUploadError("SCOPE_OR_PERMISSION", {
+              message: "Shopify wouldn't allow the existing product images to be checked.",
+            });
+          }
+          if (response.status === 429 || response.status >= 500 || response.status === 404) {
+            throw new ShopifyUploadError("SHOPIFY_UNAVAILABLE", {
+              message: "We couldn't verify the existing Shopify product images.",
+              retryAfterSeconds:
+                Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter : undefined,
+            });
+          }
+          throw new ShopifyUploadError("INVALID_REQUEST", {
+            message: "Shopify couldn't provide an existing product image for duplicate checking.",
+          });
+        }
+
+        const original = new Uint8Array(await response.arrayBuffer());
+        if (source.fileSize !== null && original.byteLength !== source.fileSize) continue;
+        hash = sha256(original);
+        sourceHashByMedia.set(media.id, hash);
+        knownHashToMedia.set(hash, media.id);
+      }
+
+      if (hash === wantedHash) return media.id;
     }
-    if (!product.media.pageInfo.hasNextPage) return ids;
-    after = product.media.pageInfo.endCursor;
-    if (!after) throw new ShopifyUploadError("INVALID_REQUEST");
-  }
+    return null;
+  };
+
+  return {
+    attachedIds,
+    findExactMatch,
+    remember(mediaId, bytes) {
+      if (!MEDIA_IMAGE_GID_RE.test(mediaId)) return;
+      attachedIds.add(mediaId);
+      knownHashToMedia.set(sha256(bytes), mediaId);
+    },
+  };
+}
+
+/**
+ * Returns the MediaImage IDs currently attached to a Shopify product.
+ * Kept as a small compatibility helper; the sync worker uses the richer content matcher.
+ */
+export async function getAttachedProductMediaIds(
+  input: { workspaceId: string; storeId: string; productId: string },
+  deps: ConnectionDeps,
+): Promise<Set<string>> {
+  const matcher = await createProductMediaContentMatcher(input, deps);
+  return new Set(matcher.attachedIds);
 }
 
 /** Secret: never log, store or return outside this module. */
@@ -518,6 +660,11 @@ export type UploadProductImageInput = {
   checksum?: string | null;
   driveModifiedAt?: Date | null;
   dryRun?: boolean;
+  /**
+   * Trusted server-side duplicate match. When set, this Drive file already exists
+   * on the matched Shopify product under this MediaImage ID, even if the filename differs.
+   */
+  existingShopifyMediaId?: string | null;
 };
 
 export type UploadProductImageResult =
@@ -526,7 +673,7 @@ export type UploadProductImageResult =
       status: "skipped";
       productId: string;
       mediaId: string | null;
-      reason: "already_uploaded" | "in_progress" | "permanent_failure";
+      reason: "already_uploaded" | "already_on_shopify" | "in_progress" | "permanent_failure";
       errorCode?: string | null;
     }
   | { status: "dry_run"; productId: string; wouldUpload: true }
@@ -647,6 +794,26 @@ export async function uploadProductImage(input: UploadProductImageInput, deps: M
   }
 
   const scope = { workspaceId: input.workspaceId, storeId: input.storeId, imageId: image.id };
+
+  // The worker has already compared bytes against Shopify's ORIGINAL source files.
+  // Adopt that existing media into the ledger instead of creating another Shopify file.
+  if (claim.action === "upload" && input.existingShopifyMediaId) {
+    const existingMediaId = input.existingShopifyMediaId;
+    if (!MEDIA_IMAGE_GID_RE.test(existingMediaId)) {
+      return failed(productId, null, new ShopifyUploadError("INVALID_REQUEST", { message: "Invalid existing Shopify media reference." }));
+    }
+    const check = validateImageForUpload({ filename, mimeType: input.mimeType, bytes: input.bytes });
+    if (!check.ok) return failed(productId, null, new ShopifyUploadError(check.code, { message: check.message }));
+    try {
+      await deps.images.markProcessing(scope, existingMediaId);
+      await deps.images.markUploaded(scope, existingMediaId);
+      return { status: "skipped", productId, mediaId: existingMediaId, reason: "already_on_shopify" };
+    } catch (error) {
+      if (error instanceof SyncImageAccessError) return failed(productId, existingMediaId, new ShopifyUploadError("STORE_NOT_FOUND"));
+      throw error;
+    }
+  }
+
   await deps.images.recordAttempt(scope);
   let mediaId: string | null = claim.action === "resume" ? image.shopifyMediaId : null;
 
