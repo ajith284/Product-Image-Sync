@@ -255,6 +255,37 @@ describe("sync worker — images and duplicates", () => {
       .toMatchObject({ uploadStatus: "uploaded" });
   });
 
+  it("13c. same Shopify image with a different filename/Drive file id → skipped by exact content", async () => {
+    const env = workerEnv();
+    const mediaId = "gid://shopify/MediaImage/7777";
+    env.attachedMediaByProduct
+      .set("gid://shopify/Product/1", new Set([mediaId]));
+    env.mediaBytesById.set(
+      mediaId,
+      Buffer.from("JPEG-BYTES-milano1jpgxxxxx"),
+    );
+
+    env.db.addJob();
+    await run(env);
+
+    expect(uploadedFiles(env)).toEqual([
+      "milano2jpgxxxxx",
+      "durres1jpgxxxxx",
+    ]);
+    expect(job(env).progress).toMatchObject({
+      uploaded: 2,
+      skipped: 1,
+      failed: 0,
+    });
+    expect(
+      env.db.images.find((r) => r.driveFileId === "milano1jpgxxxxx"),
+    ).toMatchObject({
+      uploadStatus: "uploaded",
+      shopifyMediaId: mediaId,
+    });
+  });
+
+
   it("14. changed checksum → uploaded again; same filename with a different Drive file → separate upload", async () => {
     const env = workerEnv();
     env.db.addJob();
