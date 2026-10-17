@@ -141,14 +141,14 @@ export async function searchProducts(
 
   const pageSize = opts.pageSize ?? SEARCH_PAGE_SIZE;
   const maxPages = opts.maxPages ?? SEARCH_MAX_PAGES;
-  const candidates: ProductSummary[] = [];
-  let after: string | null = null;
-  let truncated = false;
+  async function fetchCandidates(searchQuery: string) {
+    const candidates: ProductSummary[] = [];
+    let after: string | null = null;
+    let truncated = false;
 
-  try {
     for (let page = 0; page < maxPages; page++) {
       const { data }: { data: SearchData } = await client.graphql<SearchData>(PRODUCT_SEARCH_QUERY, {
-        query,
+        query: searchQuery,
         first: pageSize,
         after,
       });
@@ -157,6 +157,26 @@ export async function searchProducts(
       after = data.products.pageInfo.endCursor;
       if (page === maxPages - 1) truncated = true;
     }
+    return { candidates, truncated };
+  }
+
+  try {
+    // Fast path: Shopify narrows candidates by word-prefix search.
+    const primary = await fetchCandidates(query);
+    const primaryMatches = filterMatchingProducts(term, primary.candidates);
+    if (primaryMatches.length > 0 || primary.truncated) {
+      return { products: primaryMatches, truncated: primary.truncated };
+    }
+
+    // Reliability fallback: some valid "contains" matches are invisible to
+    // Shopify's word-prefix search (for example folder "Milano" vs title
+    // "SuperMilano Sofa"). Scan a bounded all-status catalog and apply our
+    // authoritative normalized-title contains rule locally.
+    const fallback = await fetchCandidates(`status:${ALL_PRODUCT_STATUSES.join(",")}`);
+    return {
+      products: filterMatchingProducts(term, fallback.candidates),
+      truncated: fallback.truncated,
+    };
   } catch (error) {
     if (error instanceof ShopifyApiError && (error.kind === "unauthorized" || error.kind === "not_found")) {
       // Token revoked / app removed: same handling as Verify.
@@ -170,7 +190,4 @@ export async function searchProducts(
     }
     throw error;
   }
-
-  // Exact rule from PROJECT_SPEC §6: normalized title CONTAINS normalized term.
-  return { products: filterMatchingProducts(term, candidates), truncated };
 }
